@@ -1,5 +1,7 @@
 # FreeType Fortran Port - TODO
 
+**Important**: This TODO list must be updated regularly as tasks are completed. Mark completed tasks with ✅ and update phase/week status summaries.
+
 ## Phase 0: Meta-Planning and Architecture Strategy
 
 ### Overview
