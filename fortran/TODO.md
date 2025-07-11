@@ -354,41 +354,41 @@ fortran/
 ### Week 4: Glyph Access and Basic Metrics
 
 #### Day 16: Character Map (cmap) Basics
-46. **Task 4.1.1**: Define cmap table header
+46. ✅ **Task 4.1.1**: Define cmap table header
     - Test: Structure layout
     - Deliverable: Cmap header type
 
-47. **Task 4.1.2**: Parse format 4 subtable (most common)
+47. ✅ **Task 4.1.2**: Parse format 4 subtable (most common)
     - Test: Read segment arrays
     - Deliverable: Basic cmap parser
 
-48. **Task 4.1.3**: Implement char-to-glyph mapping
+48. ✅ **Task 4.1.3**: Implement char-to-glyph mapping
     - Test: Map ASCII to glyph IDs
     - Deliverable: Character lookup
 
 #### Day 17: Glyph Location (loca) Table
-49. **Task 4.2.1**: Define loca table format
+49. ✅ **Task 4.2.1**: Define loca table format
     - Test: Short/long format detection
     - Deliverable: Loca table type
 
-50. **Task 4.2.2**: Parse glyph offsets
+50. ✅ **Task 4.2.2**: Parse glyph offsets
     - Test: Extract offset array
     - Deliverable: Glyph offset access
 
-51. **Task 4.2.3**: Calculate glyph data sizes
+51. ✅ **Task 4.2.3**: Calculate glyph data sizes
     - Test: Compute glyph lengths
     - Deliverable: Glyph size info
 
 #### Day 18: Horizontal Metrics (hmtx)
-52. **Task 4.3.1**: Define hmtx table structure
+52. ✅ **Task 4.3.1**: Define hmtx table structure
     - Test: Metric record layout
     - Deliverable: Hmtx types
 
-53. **Task 4.3.2**: Parse advance widths
+53. ✅ **Task 4.3.2**: Parse advance widths
     - Test: Extract horizontal advances
     - Deliverable: Width extraction
 
-54. **Task 4.3.3**: Get metrics for glyph ID
+54. ✅ **Task 4.3.3**: Get metrics for glyph ID
     - Test: Lookup specific glyph metrics
     - Deliverable: Glyph metric API
 
