@@ -213,48 +213,45 @@ contains
     success = .false.
     error = FT_Err_Ok
     
-    ! Allocate RGBA image data (width * height * 4)
-    allocate(img_data(bitmap%width * bitmap%rows * 4))
+    ! Allocate RGB image data (width * height * 3)
+    allocate(img_data(bitmap%width * bitmap%rows * 3))
     
-    ! Convert bitmap to RGBA array based on pixel mode
+    ! Convert bitmap to RGB array based on pixel mode
     select case (bitmap%pixel_mode)
     case (FT_PIXEL_MODE_MONO)
-      ! Monochrome to RGBA
+      ! Monochrome to RGB
       do y = 0, bitmap%rows - 1
         do x = 0, bitmap%width - 1
-          idx = (y * bitmap%width + x) * 4 + 1
+          idx = (y * bitmap%width + x) * 3 + 1
           if (ft_bitmap_get_pixel(bitmap, x, y)) then
             ! Black pixel
             img_data(idx) = 0_int8      ! R
             img_data(idx+1) = 0_int8    ! G
             img_data(idx+2) = 0_int8    ! B
-            img_data(idx+3) = -1_int8   ! A (255)
           else
             ! White pixel
             img_data(idx) = -1_int8     ! R (255)
             img_data(idx+1) = -1_int8   ! G (255)
             img_data(idx+2) = -1_int8   ! B (255)
-            img_data(idx+3) = -1_int8   ! A (255)
           end if
         end do
       end do
       
     case (FT_PIXEL_MODE_GRAY)
-      ! Grayscale to RGBA
+      ! Grayscale to RGB
       do y = 0, bitmap%rows - 1
         do x = 0, bitmap%width - 1
-          idx = (y * bitmap%width + x) * 4 + 1
+          idx = (y * bitmap%width + x) * 3 + 1
           byte_offset = y * abs(bitmap%pitch) + x + 1
           if (byte_offset > 0 .and. byte_offset <= size(bitmap%buffer)) then
-            ! Invert for text: 0=white, 255=black
-            gray_val = 255 - iand(int(bitmap%buffer(byte_offset)), 255)
+            ! Use grayscale value directly
+            gray_val = iand(int(bitmap%buffer(byte_offset)), 255)
           else
             gray_val = 255
           end if
           img_data(idx) = int(gray_val, int8)      ! R
           img_data(idx+1) = int(gray_val, int8)    ! G
           img_data(idx+2) = int(gray_val, int8)    ! B
-          img_data(idx+3) = -1_int8                 ! A (255)
         end do
       end do
       
