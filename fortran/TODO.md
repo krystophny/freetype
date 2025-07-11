@@ -83,7 +83,7 @@ fortran/
 │   ├── truetype/       # TrueType support
 │   ├── raster/         # Rasterization
 │   └── iso_c/          # C interface bindings
-├── tests/
+├── test/
 │   ├── unit/           # Module unit tests
 │   ├── integration/    # Cross-module tests
 │   ├── validation/     # C vs Fortran comparison
