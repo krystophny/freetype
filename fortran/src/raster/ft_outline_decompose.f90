@@ -299,12 +299,14 @@ contains
     ex1 = fx1 / 64
     ey1 = fy1 / 64
     
-    ! Skip horizontal lines (no vertical contribution)
+    ! Skip horizontal lines for scanline processing (they don't cross scanlines)
+    ! But note: In full FreeType, horizontal lines do contribute to area calculation
     if (ey0 == ey1) then
       return
     end if
     
     ! Ensure y0 < y1 for scanline processing
+    ! Also track winding direction for proper cover sign
     if (ey0 > ey1) then
       ! Swap endpoints
       call swap_points(fx0, fy0, fx1, fy1)
@@ -313,6 +315,10 @@ contains
     
     dy = fy1 - fy0
     dx = fx1 - fx0
+    
+    ! Determine winding direction based on original line direction
+    ! If dx > 0 (going right), cover should be positive (entering shape)
+    ! If dx < 0 (going left), cover should be negative (exiting shape)
     
     ! For each scanline intersected by the line
     do y = ey0, ey1 - 1
@@ -334,8 +340,21 @@ contains
       px = x_start / 64
       
       ! Calculate coverage contribution using FreeType method
-      ! Cover = vertical delta (always 1 scanline = 64 units in 26.6 format)
-      cover = 64
+      ! Cover = vertical delta with proper winding direction
+      ! For vertical lines (dx=0), use line direction: down=positive, up=negative
+      ! For non-vertical lines, use horizontal direction: right=positive, left=negative
+      if (dx == 0) then
+        ! Vertical line: down=positive winding, up=negative winding
+        if (dy > 0) then
+          cover = 64   ! Going down (positive winding)
+        else
+          cover = -64  ! Going up (negative winding)
+        end if
+      else if (dx > 0) then
+        cover = 64   ! Going right (positive winding)
+      else
+        cover = -64  ! Going left (negative winding)
+      end if
       
       ! Area = integral of line segment within this pixel cell
       ! For a line segment, area = (x_start + x_end) * height / 2

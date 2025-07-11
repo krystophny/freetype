@@ -282,7 +282,7 @@ contains
       ! print '("DEBUG sweep y=", I0, " initial cover=", I0, " x=", I0)', y, cover, x
       
       do while (associated(cell))
-        ! print '("DEBUG cell: x=", I0, " cover=", I0, " area=", I0)', cell%x, cell%cover, cell%area
+        ! print '("DEBUG cell: x=", I0, " cover=", I0, " area=", I0, " running_cover=", I0)', cell%x, cell%cover, cell%area, cover
         ! Check rendering mode
         if (iand(raster%flags, FT_RASTER_FLAG_AA) /= 0 .and. &
             raster%target%pixel_mode == FT_PIXEL_MODE_GRAY) then
@@ -290,8 +290,13 @@ contains
           
           ! INTERIOR FILLING: Fill span between edges if inside shape
           if (cover /= 0 .and. cell%x > x) then
-            ! Apply FreeType FT_FILL_RULE
-            call ft_fill_rule(coverage, cover, FT_FILL_NON_ZERO)
+            ! For interior pixels, use the full winding number times pixel area
+            ! FreeType uses (winding_number * ONE_PIXEL * ONE_PIXEL) for interior
+            ! Our cover is already scaled by 4, so multiply by (256 * 256 / 4) = 16384
+            call ft_fill_rule(coverage, cover * 16384, FT_FILL_NON_ZERO)
+            
+            ! DEBUG: Uncomment to debug interior filling
+            ! print '("DEBUG: Interior fill from x=", I0, " to x=", I0, " coverage=", I0)', x, cell%x - 1, coverage
             
             ! Fill horizontal span from x to cell%x - 1
             do fill_x = x, cell%x - 1
@@ -301,16 +306,18 @@ contains
             end do
           end if
           
-          ! ACCUMULATE COVERAGE: Update running total (FreeType uses ONE_PIXEL * 2 = 512)
+          ! ACCUMULATE COVERAGE: Update running total BEFORE rendering edge
           ! Note: Our coordinates are in 26.6 format, need to scale to FreeType's 8.8 format
           ! Convert: 26.6 -> 8.8 by multiplying by 4 (64->256 scale factor)
+          ! DEBUG: Uncomment to debug cover accumulation
+          ! print '("DEBUG: y=", I0, " x=", I0, " old_cover=", I0, " cell_cover=", I0)', y, cell%x, cover, cell%cover
           cover = cover + cell%cover * 4
-          area = cell%area
+          ! print '("DEBUG: new_cover=", I0)', cover
           
           ! EDGE RENDERING: Render the edge pixel itself
-          if (area /= 0 .and. cell%x >= raster%min_ex .and. cell%x < raster%max_ex) then
-            ! Apply FreeType FT_FILL_RULE
-            call ft_fill_rule(coverage, area, FT_FILL_NON_ZERO)
+          if (cell%area /= 0 .and. cell%x >= raster%min_ex .and. cell%x < raster%max_ex) then
+            ! Apply FreeType FT_FILL_RULE to the edge area
+            call ft_fill_rule(coverage, cell%area, FT_FILL_NON_ZERO)
             call ft_bitmap_set_pixel_gray(raster%target, cell%x, y, coverage)
           end if
           
@@ -348,7 +355,8 @@ contains
     integer, intent(in) :: fill
     
     ! DEBUG: Print area value to understand what we're getting
-    ! print '("DEBUG: area=", I0, " fill=", I0)', area, fill
+    ! DEBUG: Uncomment to debug coverage calculation
+    ! print '("DEBUG FT_FILL_RULE: area=", I0, " fill=", I0)', area, fill
     
     ! coverage = area >> (PIXEL_BITS * 2 + 1 - 8)
     ! With PIXEL_BITS = 8: area >> (8*2 + 1 - 8) = area >> 9
