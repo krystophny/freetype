@@ -1,6 +1,7 @@
 module ft_bitmap_io
   use ft_types
   use ft_bitmap_mod
+  use fortplot_png, only: write_png_file
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: int8, int16, int32
   implicit none
@@ -10,6 +11,7 @@ module ft_bitmap_io
   public :: ft_bitmap_write_pbm
   public :: ft_bitmap_write_pgm
   public :: ft_bitmap_write_ppm
+  public :: ft_bitmap_write_png
   
 contains
 
@@ -196,5 +198,82 @@ contains
     success = .true.
     
   end function ft_bitmap_write_ppm
+  
+  ! Write bitmap as PNG file using fortplotlib
+  function ft_bitmap_write_png(bitmap, filename, error) result(success)
+    type(FT_Bitmap), intent(in) :: bitmap
+    character(len=*), intent(in) :: filename
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    integer(int8), allocatable :: img_data(:)  ! RGBA image data for fortplotlib
+    integer :: x, y, byte_offset, idx
+    integer :: gray_val
+    
+    success = .false.
+    error = FT_Err_Ok
+    
+    ! Allocate RGBA image data (width * height * 4)
+    allocate(img_data(bitmap%width * bitmap%rows * 4))
+    
+    ! Convert bitmap to RGBA array based on pixel mode
+    select case (bitmap%pixel_mode)
+    case (FT_PIXEL_MODE_MONO)
+      ! Monochrome to RGBA
+      do y = 0, bitmap%rows - 1
+        do x = 0, bitmap%width - 1
+          idx = (y * bitmap%width + x) * 4 + 1
+          if (ft_bitmap_get_pixel(bitmap, x, y)) then
+            ! Black pixel
+            img_data(idx) = 0_int8      ! R
+            img_data(idx+1) = 0_int8    ! G
+            img_data(idx+2) = 0_int8    ! B
+            img_data(idx+3) = -1_int8   ! A (255)
+          else
+            ! White pixel
+            img_data(idx) = -1_int8     ! R (255)
+            img_data(idx+1) = -1_int8   ! G (255)
+            img_data(idx+2) = -1_int8   ! B (255)
+            img_data(idx+3) = -1_int8   ! A (255)
+          end if
+        end do
+      end do
+      
+    case (FT_PIXEL_MODE_GRAY)
+      ! Grayscale to RGBA
+      do y = 0, bitmap%rows - 1
+        do x = 0, bitmap%width - 1
+          idx = (y * bitmap%width + x) * 4 + 1
+          byte_offset = y * abs(bitmap%pitch) + x + 1
+          if (byte_offset > 0 .and. byte_offset <= size(bitmap%buffer)) then
+            ! Invert for text: 0=white, 255=black
+            gray_val = 255 - iand(int(bitmap%buffer(byte_offset)), 255)
+          else
+            gray_val = 255
+          end if
+          img_data(idx) = int(gray_val, int8)      ! R
+          img_data(idx+1) = int(gray_val, int8)    ! G
+          img_data(idx+2) = int(gray_val, int8)    ! B
+          img_data(idx+3) = -1_int8                 ! A (255)
+        end do
+      end do
+      
+    case default
+      ! Unsupported format
+      deallocate(img_data)
+      error = FT_Err_Invalid_Argument
+      return
+    end select
+    
+    ! Write PNG file using fortplotlib
+    call write_png_file(trim(filename), bitmap%width, bitmap%rows, img_data)
+    
+    ! Cleanup
+    deallocate(img_data)
+    
+    error = FT_Err_Ok
+    success = .true.
+    
+  end function ft_bitmap_write_png
 
 end module ft_bitmap_io

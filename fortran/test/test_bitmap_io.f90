@@ -16,6 +16,7 @@ program test_bitmap_io
   call test_pbm_writer()
   call test_pgm_writer()
   call test_shape_rendering()
+  call test_png_writer()
   
   ! Print test summary
   print '(/, "FT_Bitmap_IO Tests - Tests run: ", I0)', test_count
@@ -197,5 +198,106 @@ contains
     call ft_bitmap_done(bitmap)
     
   end subroutine test_shape_rendering
+  
+  subroutine test_png_writer()
+    type(FT_Outline), target :: outline
+    type(FT_Bitmap), target :: bitmap
+    integer(FT_Error) :: error
+    logical :: success
+    logical :: file_exists
+    
+    print '(/, "Testing PNG file writer...")'
+    
+    ! Create a nice shape - letter 'A' outline
+    success = ft_outline_new(7, 2, outline, error)
+    if (.not. success) return
+    
+    ! Outer contour of 'A'
+    outline%points(1) = FT_Vector(512, 3584)    ! Bottom left
+    outline%points(2) = FT_Vector(1024, 512)    ! Top left
+    outline%points(3) = FT_Vector(1536, 512)    ! Top right
+    outline%points(4) = FT_Vector(2048, 3584)   ! Bottom right
+    
+    ! Inner triangle (crossbar hole)
+    outline%points(5) = FT_Vector(1024, 2048)   ! Left
+    outline%points(6) = FT_Vector(1536, 2048)   ! Right
+    outline%points(7) = FT_Vector(1280, 1536)   ! Top
+    
+    outline%contours(1) = 3  ! Outer contour
+    outline%contours(2) = 6  ! Inner contour
+    outline%tags = FT_CURVE_TAG_ON
+    
+    ! Create larger bitmap for better quality
+    success = ft_bitmap_new(32, 32, FT_PIXEL_MODE_MONO, bitmap, error)
+    if (.not. success) then
+      call ft_outline_done(outline)
+      return
+    end if
+    
+    ! Render the letter
+    success = ft_render_outline_filled(outline, bitmap, error)
+    
+    if (success) then
+      ! Write to PNG file
+      test_count = test_count + 1
+      success = ft_bitmap_write_png(bitmap, "test_letter_A.png", error)
+      
+      if (success) then
+        print '("PASS: PNG file written successfully")'
+        
+        ! Check if file exists
+        inquire(file="test_letter_A.png", exist=file_exists)
+        test_count = test_count + 1
+        if (file_exists) then
+          print '("PASS: PNG file exists")'
+        else
+          print '("FAIL: PNG file not created")'
+          failed_count = failed_count + 1
+        end if
+        
+        ! Also create a grayscale version
+        call ft_bitmap_done(bitmap)
+        success = ft_bitmap_new(32, 32, FT_PIXEL_MODE_GRAY, bitmap, error)
+        if (success) then
+          ! Simple gradient fill for testing
+          call create_gradient_letter(bitmap)
+          
+          test_count = test_count + 1
+          success = ft_bitmap_write_png(bitmap, "test_gradient_A.png", error)
+          if (success) then
+            print '("PASS: Grayscale PNG written")'
+          else
+            print '("FAIL: Could not write grayscale PNG")'
+            failed_count = failed_count + 1
+          end if
+        end if
+      else
+        print '("FAIL: Could not write PNG file")'
+        failed_count = failed_count + 1
+      end if
+    end if
+    
+    ! Cleanup
+    call ft_outline_done(outline)
+    call ft_bitmap_done(bitmap)
+    
+  end subroutine test_png_writer
+  
+  ! Helper to create a gradient effect
+  subroutine create_gradient_letter(bitmap)
+    type(FT_Bitmap), intent(inout) :: bitmap
+    integer :: x, y, gray
+    
+    do y = 0, bitmap%rows - 1
+      do x = 0, bitmap%width - 1
+        ! Simple diagonal gradient
+        gray = ((x + y) * 255) / (bitmap%width + bitmap%rows)
+        if (associated(bitmap%buffer)) then
+          bitmap%buffer(y * bitmap%pitch + x + 1) = int(gray, int8)
+        end if
+      end do
+    end do
+    
+  end subroutine create_gradient_letter
 
 end program test_bitmap_io
