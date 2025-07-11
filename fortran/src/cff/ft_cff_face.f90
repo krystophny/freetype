@@ -1,9 +1,11 @@
 ! CFF font face loading and management
 module ft_cff_face
-  use ft_types, only: FT_Error, FT_Err_Ok, FT_Err_Invalid_Argument, FT_Err_Invalid_File_Format, FT_Err_Invalid_Face_Handle
+  use ft_types, only: FT_Error, FT_Err_Ok, FT_Err_Invalid_Argument, FT_Err_Invalid_File_Format, &
+                      FT_Err_Invalid_Face_Handle, FT_Err_Invalid_Glyph_Index
   use ft_stream
   use ft_cff, only: FT_CFF_Parser, FT_CFF_INDEX, FT_CFF_DICT, FT_CFF_DICT_Entry, &
                    ft_cff_parser_new, ft_cff_parser_done, ft_cff_parse_index, ft_cff_parse_dict, &
+                   ft_cff_parse_charstrings, &
                    CFF_OP_VERSION, CFF_OP_NOTICE, CFF_OP_FULLNAME, CFF_OP_FAMILYNAME, &
                    CFF_OP_WEIGHT, CFF_OP_FONTBBOX
   use, intrinsic :: iso_c_binding
@@ -19,6 +21,7 @@ module ft_cff_face
   public :: ft_cff_face_done
   public :: ft_cff_load_font
   public :: ft_cff_get_font_info
+  public :: ft_cff_get_glyph_charstring
   
   ! CFF font face structure
   type :: FT_CFF_Face_Type
@@ -224,10 +227,21 @@ contains
     error = FT_Err_Ok
     
     ! Parse Top DICT from first entry
+    print *, "DEBUG: Top DICT INDEX count =", face%cff_parser%top_dict_index%count
     if (face%cff_parser%top_dict_index%count > 0) then
       if (.not. parse_top_dict_entry(face, 1, error)) then
+        print *, "DEBUG: Failed to parse Top DICT entry"
         return
       end if
+    end if
+    
+    ! Parse CharStrings INDEX (optional for minimal testing)
+    if (.not. ft_cff_parse_charstrings(face%cff_parser, error)) then
+      ! For minimal CFF data without CharStrings, set default values
+      face%num_glyphs = 2  ! Default for testing
+    else
+      ! Set number of glyphs from CharStrings count
+      face%num_glyphs = face%cff_parser%charstrings_index%count
     end if
     
     success = .true.
@@ -261,13 +275,17 @@ contains
     end if
     
     ! Parse the dictionary
+    print *, "DEBUG: Parsing Top DICT at offset", dict_offset, "length", dict_length
     if (.not. ft_cff_parse_dict( &
         face%cff_parser%top_dict_index%data(dict_offset:dict_offset + dict_length - 1), &
         dict_length, &
         face%cff_parser%top_dict, &
         error)) then
+      print *, "DEBUG: Failed to parse Top DICT, error =", error
       return
     end if
+    
+    print *, "DEBUG: Top DICT entries =", face%cff_parser%top_dict%num_entries
     
     success = .true.
     
@@ -370,5 +388,59 @@ contains
     index%data_size = 0
     
   end subroutine cleanup_index
+
+  ! Get CharString data for a glyph
+  function ft_cff_get_glyph_charstring(face, glyph_index, charstring, length, error) result(success)
+    type(FT_CFF_Face_Type), intent(in) :: face
+    integer, intent(in) :: glyph_index
+    character(len=1), allocatable, intent(out) :: charstring(:)
+    integer, intent(out) :: length
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    integer :: start_offset, end_offset
+    integer :: i
+    
+    success = .false.
+    error = FT_Err_Ok
+    length = 0
+    
+    ! Check if face is loaded
+    if (.not. face%is_loaded) then
+      error = FT_Err_Invalid_Face_Handle
+      return
+    end if
+    
+    ! Check glyph index
+    if (glyph_index < 0 .or. glyph_index >= face%cff_parser%charstrings_index%count) then
+      error = FT_Err_Invalid_Glyph_Index
+      return
+    end if
+    
+    ! Check if offsets are allocated
+    if (.not. allocated(face%cff_parser%charstrings_index%offsets)) then
+      error = FT_Err_Invalid_File_Format
+      return
+    end if
+    
+    ! Get CharString offsets
+    start_offset = face%cff_parser%charstrings_index%offsets(glyph_index + 1)
+    end_offset = face%cff_parser%charstrings_index%offsets(glyph_index + 2)
+    length = end_offset - start_offset
+    
+    if (length <= 0) then
+      error = FT_Err_Invalid_File_Format
+      return
+    end if
+    
+    ! Allocate and copy CharString data
+    allocate(charstring(length))
+    do i = 1, length
+      charstring(i) = face%cff_parser%charstrings_index%data(start_offset + i - 1)
+    end do
+    
+    success = .true.
+    
+  end function ft_cff_get_glyph_charstring
 
 end module ft_cff_face

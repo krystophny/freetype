@@ -22,6 +22,8 @@ module ft_cff
   public :: ft_cff_parse_header
   public :: ft_cff_parse_index
   public :: ft_cff_parse_dict
+  public :: ft_cff_parse_charstrings
+  public :: ft_cff_get_charstrings_offset
   
   ! Public constants
   public :: CFF_OP_VERSION
@@ -75,7 +77,9 @@ module ft_cff
     type(FT_CFF_INDEX) :: top_dict_index
     type(FT_CFF_INDEX) :: string_index
     type(FT_CFF_INDEX) :: global_subr_index
+    type(FT_CFF_INDEX) :: charstrings_index
     type(FT_CFF_DICT) :: top_dict
+    integer :: charstrings_offset
     logical :: is_cff2
   end type FT_CFF_Parser
   
@@ -226,8 +230,11 @@ contains
     success = .false.
     error = FT_Err_Ok
     
+    print *, "DEBUG: Parsing INDEX at position", parser%position
+    
     ! Check we have enough data for count
     if (parser%position + 2 > parser%data_length) then
+      print *, "DEBUG: Not enough data for INDEX count"
       error = FT_Err_Invalid_File_Format
       return
     end if
@@ -514,5 +521,67 @@ contains
     dict%num_entries = 0
     
   end subroutine cleanup_dict
+
+  ! Extract CharStrings offset from Top DICT
+  function ft_cff_get_charstrings_offset(parser) result(offset)
+    type(FT_CFF_Parser), intent(in) :: parser
+    integer :: offset
+    
+    integer :: i
+    
+    offset = 0
+    
+    ! Search for CharStrings operator in Top DICT
+    do i = 1, parser%top_dict%num_entries
+      if (parser%top_dict%entries(i)%operator == CFF_OP_CHARSTRINGS) then
+        if (parser%top_dict%entries(i)%num_operands >= 1) then
+          offset = int(parser%top_dict%entries(i)%operands(1))
+        end if
+        exit
+      end if
+    end do
+    
+  end function ft_cff_get_charstrings_offset
+
+  ! Parse CharStrings INDEX at given offset
+  function ft_cff_parse_charstrings(parser, error) result(success)
+    type(FT_CFF_Parser), intent(inout) :: parser
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    integer :: saved_pos
+    
+    success = .false.
+    error = FT_Err_Ok
+    
+    ! Get CharStrings offset from Top DICT
+    parser%charstrings_offset = ft_cff_get_charstrings_offset(parser)
+    
+    if (parser%charstrings_offset == 0) then
+      error = FT_Err_Invalid_File_Format
+      return
+    end if
+    
+    ! Save current position
+    saved_pos = parser%position
+    
+    ! Move to CharStrings INDEX
+    parser%position = parser%charstrings_offset + 1  ! CFF offsets are 1-based
+    
+    if (parser%position > parser%data_length) then
+      error = FT_Err_Invalid_File_Format
+      parser%position = saved_pos
+      return
+    end if
+    
+    ! Parse CharStrings INDEX
+    if (.not. ft_cff_parse_index(parser, parser%charstrings_index, error)) then
+      parser%position = saved_pos
+      return
+    end if
+    
+    success = .true.
+    
+  end function ft_cff_parse_charstrings
 
 end module ft_cff

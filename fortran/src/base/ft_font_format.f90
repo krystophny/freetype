@@ -3,7 +3,7 @@ module ft_font_format
   use ft_types
   use ft_stream
   use, intrinsic :: iso_c_binding
-  use, intrinsic :: iso_fortran_env, only: int64
+  use, intrinsic :: iso_fortran_env, only: int8, int64
   implicit none
   private
   
@@ -50,25 +50,37 @@ contains
     
     character(len=4) :: tag
     character(len=12) :: header
-    integer :: pos_save
+    integer(int8) :: bytes(12)
+    integer :: pos_save, i
     
     success = .false.
     error = FT_Err_Ok
     format = FT_FONT_FORMAT_UNKNOWN
+    
+    ! Check if stream is valid
+    if (.not. associated(stream%rec)) then
+      error = FT_Err_Invalid_Stream_Handle
+      return
+    end if
     
     ! Save current position
     pos_save = int(stream%rec%pos)
     
     ! Read first 12 bytes for detection
     if (.not. ft_stream_seek(stream, 0_int64, error)) then
+      print *, "Failed to seek to start, error=", error
       return
     end if
     
-    if (.not. ft_stream_read(stream, header, 12, error)) then
-      ! Restore position
-      call ft_stream_seek(stream, int(pos_save, int64), error)
-      return
-    end if
+    ! Read bytes one by one
+    do i = 1, 12
+      if (.not. ft_stream_read_byte(stream, bytes(i), error)) then
+        ! Restore position
+        success = ft_stream_seek(stream, int(pos_save, int64), error)
+        return
+      end if
+      header(i:i) = char(bytes(i))
+    end do
     
     ! Check for TrueType/OpenType
     tag = header(1:4)
@@ -121,7 +133,7 @@ contains
     end if
     
     ! Restore stream position
-    call ft_stream_seek(stream, int(pos_save, int64), error)
+    success = ft_stream_seek(stream, int(pos_save, int64), error)
     
   end function ft_detect_font_format
 

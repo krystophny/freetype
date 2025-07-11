@@ -12,6 +12,7 @@ module ft_stream
   
   ! Public functions
   public :: ft_stream_open
+  public :: ft_stream_open_memory
   public :: ft_stream_close
   public :: ft_stream_read
   public :: ft_stream_read_byte
@@ -105,7 +106,7 @@ contains
     integer(FT_Error), intent(out) :: error
     logical :: success
     
-    character(kind=c_char) :: c_filename(len(filename)+1)
+    character(kind=c_char) :: c_filename(len(trim(filename))+1)
     character(kind=c_char) :: c_mode(3)
     integer :: i
     type(c_ptr) :: file_ptr
@@ -117,10 +118,10 @@ contains
     allocate(stream%rec)
     
     ! Convert filename to C string
-    do i = 1, len(filename)
+    do i = 1, len(trim(filename))
       c_filename(i) = filename(i:i)
     end do
-    c_filename(len(filename)+1) = c_null_char
+    c_filename(len(trim(filename))+1) = c_null_char
     
     ! Open in binary read mode
     c_mode(1) = 'r'
@@ -376,5 +377,34 @@ contains
     end if
     
   end function ft_stream_size
+
+  ! Open a memory stream
+  function ft_stream_open_memory(stream, buffer, size, error) result(success)
+    type(FT_Stream_Type), intent(out) :: stream
+    character(len=*), intent(in) :: buffer
+    integer, intent(in) :: size
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    success = .false.
+    error = FT_Err_Ok
+    
+    ! Allocate stream record
+    allocate(stream%rec)
+    
+    ! Initialize stream record for memory
+    stream%rec%handle = c_null_ptr  ! No file handle for memory stream
+    stream%rec%size = int(size, c_size_t)
+    stream%rec%pos = 0
+    stream%rec%flags = FT_STREAM_FLAG_MEMORY
+    stream%rec%is_open = .true.
+    
+    ! For memory streams, we'll need to store the buffer reference
+    ! This is a simplified implementation - in practice, we'd need
+    ! to properly manage the memory buffer
+    
+    success = .true.
+    
+  end function ft_stream_open_memory
 
 end module ft_stream

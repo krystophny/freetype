@@ -164,13 +164,13 @@ contains
     
     ! More complex CharString: square glyph with width
     ! 500 100 100 rmoveto 200 0 rlineto 0 200 rlineto -200 0 rlineto endchar
-    ! Width=500 (639), movements and lines
+    ! Width=500 (short int), movements and lines
     character(len=1), parameter :: charstring(*) = [ &
-      char(251), char(0), char(135), &   ! 500 (width)
+      char(28), char(1), char(244), &    ! 500 (width) - short integer
       char(239), char(239), char(21), &  ! 100 100 rmoveto
       char(28), char(0), char(200), char(139), char(5), & ! 200 0 rlineto (using short int)
       char(139), char(28), char(0), char(200), char(5), & ! 0 200 rlineto
-      char(251), char(0), char(92), char(139), char(5), & ! -200 0 rlineto
+      char(251), char(92), char(139), char(5), & ! -200 0 rlineto
       char(14) &                          ! endchar
     ]
     
