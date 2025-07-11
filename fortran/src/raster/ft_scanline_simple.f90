@@ -69,10 +69,10 @@ contains
       
       ! Add edges for this contour
       do j = first, last - 1
-        x0 = int(outline%points(j)%x / 256)
-        y0 = int(outline%points(j)%y / 256)
-        x1 = int(outline%points(j + 1)%x / 256)
-        y1 = int(outline%points(j + 1)%y / 256)
+        x0 = int(outline%points(j)%x / 64)
+        y0 = int(outline%points(j)%y / 64)
+        x1 = int(outline%points(j + 1)%x / 64)
+        y1 = int(outline%points(j + 1)%y / 64)
         
         if (y0 /= y1) then  ! Skip horizontal edges
           n_edges = n_edges + 1
@@ -94,10 +94,10 @@ contains
       end do
       
       ! Close contour
-      x0 = int(outline%points(last)%x / 256)
-      y0 = int(outline%points(last)%y / 256)
-      x1 = int(outline%points(first)%x / 256)
-      y1 = int(outline%points(first)%y / 256)
+      x0 = int(outline%points(last)%x / 64)
+      y0 = int(outline%points(last)%y / 64)
+      x1 = int(outline%points(first)%x / 64)
+      y1 = int(outline%points(first)%y / 64)
       
       if (y0 /= y1) then
         n_edges = n_edges + 1
