@@ -2,7 +2,7 @@ module tt_glyph
   use ft_types
   use ft_stream
   use tt_types, only: FT_Short, FT_UShort
-  use, intrinsic :: iso_c_binding
+  use, intrinsic :: iso_c_binding, only: c_size_t
   use, intrinsic :: iso_fortran_env, only: int8, int16, int32
   implicit none
   private
@@ -15,6 +15,8 @@ module tt_glyph
   ! Public functions
   public :: tt_load_glyph_header
   public :: tt_load_simple_glyph
+  public :: tt_load_glyph_by_index
+  public :: tt_glyph_to_outline
   public :: tt_glyph_free
   
   ! Glyph flags
@@ -318,5 +320,117 @@ contains
     if (allocated(glyph%on_curve)) deallocate(glyph%on_curve)
     
   end subroutine cleanup_simple_glyph
+
+  ! Load a glyph by index using loca table and glyf table
+  function tt_load_glyph_by_index(stream, loca_table, glyph_index, glyph, error) result(success)
+    use tt_loca, only: TT_Loca_Table
+    type(FT_Stream_Type), intent(inout) :: stream
+    type(TT_Loca_Table), intent(in) :: loca_table
+    integer, intent(in) :: glyph_index
+    type(TT_Simple_Glyph), intent(out) :: glyph
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    integer :: glyph_offset, glyph_size
+    
+    success = .false.
+    error = FT_Err_Ok
+    
+    ! Validate glyph index
+    if (glyph_index < 0 .or. glyph_index >= size(loca_table%offsets) - 1) then
+      error = FT_Err_Invalid_Glyph_Index
+      return
+    end if
+    
+    ! Get glyph offset and size from loca table
+    glyph_offset = loca_table%offsets(glyph_index + 1)  ! +1 for 1-based indexing
+    glyph_size = loca_table%offsets(glyph_index + 2) - glyph_offset
+    
+    ! Empty glyph (size 0)
+    if (glyph_size == 0) then
+      ! Initialize as empty glyph
+      glyph%header%num_contours = 0
+      glyph%header%x_min = 0
+      glyph%header%y_min = 0
+      glyph%header%x_max = 0
+      glyph%header%y_max = 0
+      glyph%num_points = 0
+      glyph%instruction_length = 0
+      call compute_glyph_metrics(glyph)
+      success = .true.
+      return
+    end if
+    
+    ! Seek to glyph data (assuming glyf table base offset is known)
+    ! For now, assume glyph_offset is absolute - this would need to be 
+    ! adjusted with glyf table base offset in a full implementation
+    if (.not. ft_stream_seek(stream, int(glyph_offset, c_size_t), error)) then
+      return
+    end if
+    
+    ! Load glyph header first
+    if (.not. tt_load_glyph_header(stream, glyph%header, error)) then
+      return
+    end if
+    
+    ! For simple glyphs (num_contours >= 0)
+    if (glyph%header%num_contours >= 0) then
+      success = tt_load_simple_glyph(stream, glyph, error)
+    else
+      ! Composite glyph - not implemented yet
+      error = FT_Err_Unimplemented_Feature
+      return
+    end if
+    
+  end function tt_load_glyph_by_index
+
+  ! Convert TrueType glyph to FT_Outline
+  function tt_glyph_to_outline(glyph, outline, error) result(success)
+    use ft_outline_mod, only: FT_Outline, ft_outline_new, ft_outline_done, FT_CURVE_TAG_ON
+    use ft_geometry, only: FT_Vector
+    type(TT_Simple_Glyph), intent(in) :: glyph
+    type(FT_Outline), intent(out) :: outline
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    integer :: i
+    
+    success = .false.
+    error = FT_Err_Ok
+    
+    ! Handle empty glyph
+    if (glyph%num_points == 0 .or. glyph%header%num_contours == 0) then
+      success = ft_outline_new(0, 0, outline, error)
+      return
+    end if
+    
+    ! Create outline with glyph points and contours
+    success = ft_outline_new(int(glyph%num_points), int(glyph%header%num_contours), outline, error)
+    if (.not. success) return
+    
+    ! Copy points
+    do i = 1, glyph%num_points
+      outline%points(i)%x = glyph%x_coordinates(i)
+      outline%points(i)%y = glyph%y_coordinates(i)
+      
+      ! Set point tags (on-curve vs off-curve)
+      if (glyph%on_curve(i)) then
+        outline%tags(i) = FT_CURVE_TAG_ON
+      else
+        outline%tags(i) = 0  ! Off-curve (control point)
+      end if
+    end do
+    
+    ! Copy contour end points
+    do i = 1, glyph%header%num_contours
+      outline%contours(i) = glyph%end_pts_of_contours(i)
+    end do
+    
+    ! Set outline flags
+    outline%flags = 0  ! Default flags
+    
+    success = .true.
+    
+  end function tt_glyph_to_outline
 
 end module tt_glyph

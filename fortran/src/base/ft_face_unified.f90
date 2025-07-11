@@ -79,6 +79,40 @@ module ft_face_unified
   
 contains
 
+  ! Load a TrueType glyph by index
+  function load_truetype_glyph(tt_face, glyph_index, outline, error) result(success)
+    use tt_glyph, only: TT_Simple_Glyph, tt_load_glyph_by_index, tt_glyph_to_outline, tt_glyph_free
+    type(FT_Face_Type), intent(inout) :: tt_face
+    integer, intent(in) :: glyph_index
+    type(FT_Outline), intent(out) :: outline
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    type(TT_Simple_Glyph) :: glyph
+    
+    success = .false.
+    error = FT_Err_Ok
+    
+    ! Check if loca table is loaded
+    if (.not. tt_face%loca_loaded) then
+      error = FT_Err_Invalid_Table
+      return
+    end if
+    
+    ! Load the glyph by index
+    success = tt_load_glyph_by_index(tt_face%stream, tt_face%tt_loca, glyph_index, glyph, error)
+    if (.not. success) then
+      return
+    end if
+    
+    ! Convert to outline
+    success = tt_glyph_to_outline(glyph, outline, error)
+    
+    ! Clean up glyph
+    call tt_glyph_free(glyph)
+    
+  end function load_truetype_glyph
+
   ! Create a new unified face from a file
   function ft_new_unified_face(filepath, face_index, face, error) result(success)
     character(len=*), intent(in) :: filepath
@@ -214,9 +248,7 @@ contains
     select case (face%font_format)
     case (FT_FONT_FORMAT_TRUETYPE, FT_FONT_FORMAT_OPENTYPE)
       if (allocated(face%truetype_face)) then
-        ! Load TrueType glyph
-        ! This would use tt_load_glyph when available
-        error = FT_Err_Unimplemented_Feature
+        success = load_truetype_glyph(face%truetype_face, glyph_index, outline, error)
       end if
       
     case (FT_FONT_FORMAT_CFF)
