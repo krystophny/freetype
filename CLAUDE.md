@@ -6,12 +6,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 FreeType is a freely available software library to render fonts, written in C and designed to be small, efficient, highly customizable, and portable while producing high-quality output of most vector and bitmap font formats.
 
-## Current Focus
+## Current Focus: Fortran Port of FreeType
 
-- **Primary Goal**: Develop a Fortran port of the FreeType library
-- Work will be conducted in the `fortran/` subdirectory
-- Existing C implementation serves as reference and validation source
-- Refer to `fortran/README.md` and `fortran/TODO.md` for specific implementation guidelines
+**PRIMARY GOAL**: Develop a complete Fortran port of the FreeType library
+
+### Working Directory Structure
+- **Always work in `fortran/` subdirectory** as the current working directory for all Fortran development
+- Use the C code in the root directory as reference for porting
+- Create ISO C interfaces to the original C FreeType for validation testing
+
+### Fortran Development (in `fortran/` directory)
+
+**Build System**: Fortran Package Manager (fpm)
+```bash
+# IMPORTANT: Always cd to fortran/ first
+cd fortran/
+
+# Build commands
+fpm build
+fpm build --profile release
+fpm build --profile debug
+
+# Test commands
+fpm test
+fpm test --verbose
+fpm test test_name
+```
+
+**Development Principles**: 
+- Strict adherence to TDD, SOLID, KISS, SRP, and DRY
+- Bit-perfect validation against C FreeType
+- Visual validation through bitmap file comparison
+
+**Key Resources**:
+- `fortran/README.md` - Build instructions and project structure
+- `fortran/TODO.md` - Detailed implementation phases and architecture
+
+### Validation Strategy
+- Reference C implementation is in root directory (`src/`, `include/`)
+- Create thin ISO C binding layer to call original FreeType functions
+- Compare every Fortran function output with C equivalent bit-by-bit
+- Generate bitmap outputs from both implementations for visual comparison
 
 ## Build Commands
 
