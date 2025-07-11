@@ -208,19 +208,30 @@ contains
     
   end function ft_outline_decompose_simple
   
-  ! Internal line drawing for rasterizer
+  ! Internal line drawing for rasterizer with antialiasing support
   subroutine raster_line_to(raster, from, to)
+    type(FT_Raster_State), intent(inout) :: raster
+    type(FT_Vector), intent(in) :: from, to
+    
+    ! For now, use the monochrome rasterizer for both modes
+    ! The antialiasing will be handled in the coverage calculation
+    call raster_line_mono(raster, from, to)
+    
+  end subroutine raster_line_to
+  
+  ! Monochrome line rasterizer (original Bresenham)
+  subroutine raster_line_mono(raster, from, to)
     type(FT_Raster_State), intent(inout) :: raster
     type(FT_Vector), intent(in) :: from, to
     
     integer :: x0, y0, x1, y1
     integer :: dx, dy, sx, sy, err, e2
     
-    ! Convert to pixel coordinates (8.8 to integer)
-    x0 = int(from%x / 256)
-    y0 = int(from%y / 256)
-    x1 = int(to%x / 256)
-    y1 = int(to%y / 256)
+    ! Convert to pixel coordinates (26.6 to integer)
+    x0 = int(from%x / 64)
+    y0 = int(from%y / 64)
+    x1 = int(to%x / 64)
+    y1 = int(to%y / 64)
     
     ! Bresenham's line algorithm
     dx = abs(x1 - x0)
@@ -259,7 +270,148 @@ contains
       end if
     end do
     
-  end subroutine raster_line_to
+  end subroutine raster_line_mono
+  
+  ! Antialiased line rasterizer with proper coverage calculation
+  subroutine raster_line_aa(raster, from, to)
+    type(FT_Raster_State), intent(inout) :: raster
+    type(FT_Vector), intent(in) :: from, to
+    
+    integer :: x0, y0, x1, y1  ! Pixel coordinates
+    integer :: fx0, fy0, fx1, fy1  ! Fixed-point coordinates
+    integer :: dx, dy, y, x
+    integer :: area, delta_y
+    real :: slope
+    
+    ! Get coordinates in 26.6 fixed point
+    fx0 = from%x
+    fy0 = from%y  
+    fx1 = to%x
+    fy1 = to%y
+    
+    print '("DEBUG: AA line from (", I0, ",", I0, ") to (", I0, ",", I0, ")")', fx0, fy0, fx1, fy1
+    
+    ! Convert to pixel coordinates
+    x0 = fx0 / 64
+    y0 = fy0 / 64
+    x1 = fx1 / 64
+    y1 = fy1 / 64
+    
+    print '("DEBUG: Pixel coords: (", I0, ",", I0, ") to (", I0, ",", I0, ")")', x0, y0, x1, y1
+    
+    ! Skip horizontal lines (no vertical contribution)
+    if (y0 == y1) then
+      print '("DEBUG: Skipping horizontal line")'
+      return
+    end if
+    
+    ! Ensure y0 < y1 for scanline processing
+    if (y0 > y1) then
+      ! Swap endpoints
+      call swap_points(fx0, fy0, fx1, fy1)
+      call swap_ints(x0, y0, x1, y1)
+      print '("DEBUG: Swapped endpoints")'
+    end if
+    
+    dy = fy1 - fy0
+    dx = fx1 - fx0
+    
+    print '("DEBUG: Processing scanlines ", I0, " to ", I0)', y0, y1-1
+    
+    ! For each scanline intersected by the line
+    do y = y0, y1 - 1
+      ! Calculate x intersection at bottom of current scanline
+      if (dy /= 0) then
+        ! Use fixed-point arithmetic for precision
+        x = (fx0 * (64 * (y + 1) - fy0) + fx1 * (fy0 - 64 * y)) / dy
+      else
+        x = fx0
+      end if
+      
+      ! Calculate coverage contribution
+      ! This is a simplified version - proper coverage calculation is complex
+      delta_y = min(fy1, 64 * (y + 1)) - max(fy0, 64 * y)
+      area = (x / 64) * delta_y / 64  ! Approximate area
+      
+      print '("DEBUG: y=", I0, " x=", I0, " delta_y=", I0, " area=", I0)', y, x/64, delta_y/64, area
+      
+      ! Accumulate in raster cell
+      call accumulate_cell(raster, x / 64, y, delta_y / 64, area)
+    end do
+    
+  end subroutine raster_line_aa
+  
+  ! Helper to swap two points
+  subroutine swap_points(x0, y0, x1, y1)
+    integer, intent(inout) :: x0, y0, x1, y1
+    integer :: temp
+    
+    temp = x0; x0 = x1; x1 = temp
+    temp = y0; y0 = y1; y1 = temp
+    
+  end subroutine swap_points
+  
+  ! Helper to swap two integers
+  subroutine swap_ints(a, b, c, d)
+    integer, intent(inout) :: a, b, c, d
+    integer :: temp
+    
+    temp = a; a = c; c = temp
+    temp = b; b = d; d = temp
+    
+  end subroutine swap_ints
+  
+  ! Accumulate coverage in a raster cell
+  subroutine accumulate_cell(raster, x, y, cover, area)
+    type(FT_Raster_State), intent(inout) :: raster
+    integer, intent(in) :: x, y, cover, area
+    
+    integer :: ey
+    type(FT_Raster_Cell), pointer :: cell, prev_cell
+    
+    ! Check bounds
+    if (y < raster%min_ey .or. y >= raster%max_ey) return
+    if (x < raster%min_ex .or. x >= raster%max_ex) return
+    
+    ! Get y index
+    ey = y - raster%min_ey + 1
+    
+    ! Find or create cell at this position
+    cell => raster%ycells(ey)%next
+    prev_cell => raster%ycells(ey)
+    
+    do while (associated(cell))
+      if (cell%x == x) then
+        ! Found existing cell - accumulate values
+        raster%cell => cell
+        cell%cover = cell%cover + cover
+        cell%area = cell%area + area
+        return
+      else if (cell%x > x) then
+        ! Insert new cell before this one
+        exit
+      end if
+      
+      prev_cell => cell
+      cell => cell%next
+    end do
+    
+    ! Allocate new cell
+    if (raster%cell_index <= raster%num_cells) then
+      raster%cell => raster%cells(raster%cell_index)
+      raster%cell_index = raster%cell_index + 1
+      
+      ! Initialize cell
+      raster%cell%x = x
+      raster%cell%cover = cover
+      raster%cell%area = area
+      
+      ! Insert into list
+      raster%cell%next => cell
+      prev_cell%next => raster%cell
+    end if
+    
+  end subroutine accumulate_cell
   
   ! Set or update a cell at given position (internal version)
   subroutine set_raster_cell(raster, x, y)

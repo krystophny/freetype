@@ -280,11 +280,27 @@ contains
           ! Check rendering mode
           if (iand(raster%flags, FT_RASTER_FLAG_AA) /= 0 .and. &
               raster%target%pixel_mode == FT_PIXEL_MODE_GRAY) then
-            ! Anti-aliased rendering
-            ! For now, use simple coverage - just check if cell has any coverage
-            ! TODO: Implement proper subpixel coverage calculation
-            coverage = 128  ! Middle gray for testing
-            call ft_bitmap_set_pixel_gray(raster%target, x, y, coverage)
+            ! Anti-aliased rendering with simplified coverage calculation
+            ! For now, use a simple approach based on cover value
+            ! This provides variable grayscale levels based on edge crossings
+            
+            if (cell%cover > 0) then
+              ! Positive coverage - calculate gray level based on cover value
+              coverage = min(255, abs(cell%cover) * 64)  ! Scale up cover value
+            else
+              ! Use area if available
+              coverage = min(255, abs(cell%area) / 256)
+            end if
+            
+            ! Ensure we have some coverage
+            if (coverage == 0 .and. (cell%cover /= 0 .or. cell%area /= 0)) then
+              coverage = 128  ! Default middle gray
+            end if
+            
+            ! Set grayscale pixel if there's any coverage
+            if (coverage > 0) then
+              call ft_bitmap_set_pixel_gray(raster%target, x, y, coverage)
+            end if
           else
             ! Monochrome rendering
             call ft_bitmap_set_pixel(raster%target, x, y, .true.)
