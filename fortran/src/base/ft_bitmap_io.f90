@@ -213,16 +213,21 @@ contains
     success = .false.
     error = FT_Err_Ok
     
-    ! Allocate RGB image data (width * height * 3)
-    allocate(img_data(bitmap%width * bitmap%rows * 3))
+    ! Allocate image data with filter bytes (fortplotlib format)
+    ! Each row: 1 filter byte + width * 3 RGB bytes
+    allocate(img_data(bitmap%rows * (1 + bitmap%width * 3)))
     
     ! Convert bitmap to RGB array based on pixel mode
     select case (bitmap%pixel_mode)
     case (FT_PIXEL_MODE_MONO)
       ! Monochrome to RGB
+      idx = 1
       do y = 0, bitmap%rows - 1
+        ! Add filter byte at start of each row
+        img_data(idx) = 0_int8
+        idx = idx + 1
+        
         do x = 0, bitmap%width - 1
-          idx = (y * bitmap%width + x) * 3 + 1
           if (ft_bitmap_get_pixel(bitmap, x, y)) then
             ! Black pixel
             img_data(idx) = 0_int8      ! R
@@ -234,14 +239,19 @@ contains
             img_data(idx+1) = -1_int8   ! G (255)
             img_data(idx+2) = -1_int8   ! B (255)
           end if
+          idx = idx + 3
         end do
       end do
       
     case (FT_PIXEL_MODE_GRAY)
       ! Grayscale to RGB
+      idx = 1
       do y = 0, bitmap%rows - 1
+        ! Add filter byte at start of each row
+        img_data(idx) = 0_int8
+        idx = idx + 1
+        
         do x = 0, bitmap%width - 1
-          idx = (y * bitmap%width + x) * 3 + 1
           byte_offset = y * abs(bitmap%pitch) + x + 1
           if (byte_offset > 0 .and. byte_offset <= size(bitmap%buffer)) then
             ! Use grayscale value directly
@@ -252,6 +262,7 @@ contains
           img_data(idx) = int(gray_val, int8)      ! R
           img_data(idx+1) = int(gray_val, int8)    ! G
           img_data(idx+2) = int(gray_val, int8)    ! B
+          idx = idx + 3
         end do
       end do
       
