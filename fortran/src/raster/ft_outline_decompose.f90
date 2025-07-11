@@ -3,6 +3,7 @@ module ft_outline_decompose_mod
   use ft_geometry, only: FT_Vector
   use ft_outline_mod
   use ft_raster_types
+  use ft_bezier
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: int8, int16, int32
   implicit none
