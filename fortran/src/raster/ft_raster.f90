@@ -5,6 +5,8 @@ module ft_raster
   use ft_bitmap_mod
   use ft_outline_mod
   use ft_outline_decompose_mod
+  use ft_scanline
+  use ft_scanline_simple
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: int8, int16, int32
   implicit none
@@ -16,6 +18,7 @@ module ft_raster
   public :: ft_raster_reset
   public :: ft_raster_set_cell
   public :: ft_raster_render_outline
+  public :: ft_raster_render_outline_scanline
   
   ! Constants
   integer, parameter :: FT_RASTER_CELL_POOL_SIZE = 1024
@@ -280,5 +283,67 @@ contains
     end do
     
   end subroutine render_cells_to_bitmap
+  
+  ! Render outline using scanline conversion
+  function ft_raster_render_outline_scanline(outline, bitmap, error) result(success)
+    type(FT_Outline), target, intent(in) :: outline
+    type(FT_Bitmap), target, intent(inout) :: bitmap
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    type(FT_Edge_Table) :: edge_table
+    integer :: i, j, first, last
+    integer :: x0, y0, x1, y1
+    
+    success = .false.
+    error = FT_Err_Ok
+    
+    ! Clear bitmap
+    call ft_bitmap_clear(bitmap)
+    
+    ! Create edge table
+    if (.not. ft_edge_table_new(0, bitmap%rows - 1, edge_table, error)) then
+      return
+    end if
+    
+    ! Build edge table from outline
+    first = 1
+    do i = 1, outline%n_contours
+      last = outline%contours(i) + 1  ! Convert to 1-based
+      
+      ! Add edges for this contour
+      do j = first, last - 1
+        x0 = int(outline%points(j)%x / 256)
+        y0 = int(outline%points(j)%y / 256)
+        x1 = int(outline%points(j + 1)%x / 256)
+        y1 = int(outline%points(j + 1)%y / 256)
+        
+        call ft_edge_table_add_line(edge_table, x0, y0, x1, y1)
+      end do
+      
+      ! Close contour
+      x0 = int(outline%points(last)%x / 256)
+      y0 = int(outline%points(last)%y / 256)
+      x1 = int(outline%points(first)%x / 256)
+      y1 = int(outline%points(first)%y / 256)
+      
+      call ft_edge_table_add_line(edge_table, x0, y0, x1, y1)
+      
+      first = last + 1
+    end do
+    
+    ! Sort edges
+    call ft_edge_table_sort(edge_table)
+    
+    ! Convert to bitmap
+    call ft_scanline_convert(edge_table, bitmap)
+    
+    ! Cleanup
+    call ft_edge_table_done(edge_table)
+    
+    error = FT_Err_Ok
+    success = .true.
+    
+  end function ft_raster_render_outline_scanline
 
 end module ft_raster
