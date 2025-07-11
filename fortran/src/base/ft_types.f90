@@ -26,6 +26,10 @@ module ft_types
   public :: ft_f26dot6_to_float
   public :: ft_f26dot6_from_pixels
   
+  ! Constants
+  public :: FT_FIXED_ONE
+  public :: FT_F26DOT6_ONE
+  
   ! Error code constants - matching FreeType's error codes
   public :: FT_Err_Ok
   public :: FT_Err_Cannot_Open_Resource
