@@ -16,6 +16,7 @@ module ft_stream
   public :: ft_stream_read
   public :: ft_stream_read_byte
   public :: ft_stream_read_short
+  public :: ft_stream_read_ushort
   public :: ft_stream_read_long
   public :: ft_stream_seek
   public :: ft_stream_tell
@@ -263,6 +264,34 @@ contains
                 iand(int(bytes(2), int16), int(255, int16)))
     
   end function ft_stream_read_short
+  
+  ! Read a 16-bit unsigned value (big-endian)
+  function ft_stream_read_ushort(stream, value, error) result(success)
+    type(FT_Stream_Type), intent(inout) :: stream
+    integer(int16), intent(out) :: value
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    integer(int8) :: bytes(2)
+    integer :: i
+    
+    value = 0
+    success = .true.
+    
+    ! Read two bytes
+    do i = 1, 2
+      if (.not. ft_stream_read_byte(stream, bytes(i), error)) then
+        success = .false.
+        return
+      end if
+    end do
+    
+    ! Convert from big-endian (mask bytes to prevent sign extension)
+    value = ior(ishft(iand(int(bytes(1), int32), 255), 8), &
+                iand(int(bytes(2), int32), 255))
+    value = int(value, int16)
+    
+  end function ft_stream_read_ushort
   
   ! Read a 32-bit value (big-endian)
   function ft_stream_read_long(stream, value, error) result(success)
