@@ -283,16 +283,16 @@ contains
       last = outline%contours(i) + 1  ! Convert from 0-based to 1-based
       
       ! Reverse points and tags in this contour
-      do j = 0, (last - first) / 2 - 1
+      do j = 0, (last - first - 1) / 2
         ! Swap points
         temp_point = outline%points(first + j)
-        outline%points(first + j) = outline%points(last - 1 - j)
-        outline%points(last - 1 - j) = temp_point
+        outline%points(first + j) = outline%points(last - j)
+        outline%points(last - j) = temp_point
         
         ! Swap tags
         temp_tag = outline%tags(first + j)
-        outline%tags(first + j) = outline%tags(last - 1 - j)
-        outline%tags(last - 1 - j) = temp_tag
+        outline%tags(first + j) = outline%tags(last - j)
+        outline%tags(last - j) = temp_tag
       end do
       
       first = last + 1

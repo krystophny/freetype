@@ -158,9 +158,9 @@ contains
     if (.not. success) return
     
     ! Triangle vertices (scaled to fill more area)
-    outline%points(1) = FT_Vector(512, 512)    ! (2,2)
-    outline%points(2) = FT_Vector(1536, 512)   ! (6,2)
-    outline%points(3) = FT_Vector(1024, 1536)  ! (4,6)
+    outline%points(1) = FT_Vector(128, 128)    ! (2,2)
+    outline%points(2) = FT_Vector(384, 128)    ! (6,2)
+    outline%points(3) = FT_Vector(256, 384)    ! (4,6)
     outline%contours(1) = 2
     outline%tags = FT_CURVE_TAG_ON
     

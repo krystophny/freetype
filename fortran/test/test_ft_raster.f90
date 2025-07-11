@@ -87,9 +87,9 @@ contains
     if (.not. success) return
     
     outline%points(1) = FT_Vector(0, 0)
-    outline%points(2) = FT_Vector(256, 0)      ! 1 pixel in 8.8 fixed
-    outline%points(3) = FT_Vector(256, 256)
-    outline%points(4) = FT_Vector(0, 256)
+    outline%points(2) = FT_Vector(64, 0)       ! 1 pixel in 26.6 fixed
+    outline%points(3) = FT_Vector(64, 64)
+    outline%points(4) = FT_Vector(0, 64)
     outline%contours(1) = 3
     
     ! Create bitmap

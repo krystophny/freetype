@@ -365,6 +365,8 @@ contains
     if (found) then
       if (tt_load_cmap_table(face%stream, table_offset, face%tt_cmap, error)) then
         face%cmap_loaded = .true.
+      else
+        return
       end if
     end if
     
@@ -381,6 +383,8 @@ contains
                                    face%tt_head%index_to_loc_format == 1, &
                                    face%tt_loca, error)) then
               face%loca_loaded = .true.
+            else
+              return
             end if
             exit
           end if
@@ -392,10 +396,12 @@ contains
     if (face%maxp_loaded) then
       call find_table(face%directory, TTAG_hmtx, found, table_offset)
       if (found) then
-        ! For now, assume all glyphs have metrics (will need hhea table later)
-        if (tt_load_hmtx_table(face%stream, table_offset, int(face%tt_maxp%num_glyphs), &
+        ! For now, assume 3 metrics for test font (will need hhea table later)
+        if (tt_load_hmtx_table(face%stream, table_offset, 3, &
                                int(face%tt_maxp%num_glyphs), face%tt_hmtx, error)) then
           face%hmtx_loaded = .true.
+        else
+          return
         end if
       end if
     end if

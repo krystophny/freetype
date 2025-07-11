@@ -32,7 +32,7 @@ module ft_scanline
   
   ! Edge table - edges sorted by Y
   type :: FT_Edge_Table
-    type(FT_Edge), pointer :: edges(:) => null()  ! Array of edge lists by Y
+    type(FT_Edge), pointer :: edges(:) => null()  ! Array of edge head nodes by Y
     integer :: min_y
     integer :: max_y
     integer :: height
@@ -221,7 +221,8 @@ contains
         prev => sorted
         pos => sorted%next
         
-        do while (associated(pos) .and. pos%x < current%x)
+        do while (associated(pos))
+          if (pos%x >= current%x) exit
           prev => pos
           pos => pos%next
         end do
@@ -294,7 +295,8 @@ contains
       prev => active_list%head
       current => active_list%head%next
       
-      do while (associated(current) .and. current%x < edge%x)
+      do while (associated(current))
+        if (current%x >= edge%x) exit
         prev => current
         current => current%next
       end do

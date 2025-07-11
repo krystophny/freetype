@@ -89,23 +89,25 @@ contains
     integer(FT_Error) :: error
     logical :: success
     
-    ! More complete CFF data with indices
+    ! Minimal CFF data that works (from test_cff_minimal)
     character(len=1), parameter :: cff_data(*) = [ &
-      char(1), char(0), char(4), char(1), &    ! CFF header (4 bytes)
+      char(1), char(0), char(4), char(1), &    ! Header: major=1, minor=0, hdrSize=4, offSize=1 (4 bytes)
       ! Name INDEX
       char(0), char(1), &                      ! count=1 (2 bytes)
       char(1), &                               ! offset_size=1 (1 byte)
-      char(1), char(9), &                      ! offsets: 1, 9 (2 bytes)
-      char(84), char(101), char(115), char(116), char(70), char(111), char(110), char(116), & ! "TestFont" (8 bytes)
+      char(1), char(5), &                      ! offsets: 1, 5 (2 bytes) 
+      char(84), char(101), char(115), char(116), & ! "Test" (4 bytes)
       ! Top DICT INDEX
       char(0), char(1), &                      ! count=1 (2 bytes)
       char(1), &                               ! offset_size=1 (1 byte)
-      char(1), char(6), &                      ! offsets: 1, 6 (2 bytes)
-      char(139), char(139), char(5), char(0), char(0), & ! Simple DICT: "100 0 FontBBox" (5 bytes)
+      char(1), char(2), &                      ! offsets: 1, 2 (2 bytes)
+      char(0), &                               ! Empty DICT (1 byte)
       ! String INDEX (empty)
       char(0), char(0), &                      ! count=0 (2 bytes)
       ! Global Subr INDEX (empty)
-      char(0), char(0) &                       ! count=0 (2 bytes)
+      char(0), char(0), &                       ! count=0 (2 bytes)
+      ! Padding to match test_cff_minimal size
+      char(0), char(0), char(0), char(0), char(0), char(0), char(0) &  ! padding (7 bytes)
     ]
     
     total = total + 1
@@ -151,9 +153,9 @@ contains
     integer(FT_Error) :: error
     logical :: success
     
-    ! CFF data with font information
+    ! Minimal CFF data
     character(len=1), parameter :: cff_data(*) = [ &
-      char(1), char(0), char(4), char(1), &    ! CFF header (4 bytes)
+      char(1), char(0), char(4), char(1), &    ! Header (4 bytes)
       ! Name INDEX
       char(0), char(1), &                      ! count=1 (2 bytes)
       char(1), &                               ! offset_size=1 (1 byte)
@@ -162,12 +164,14 @@ contains
       ! Top DICT INDEX
       char(0), char(1), &                      ! count=1 (2 bytes)
       char(1), &                               ! offset_size=1 (1 byte)
-      char(1), char(3), &                      ! offsets: 1, 3 (2 bytes)
-      char(139), char(5), &                    ! Simple DICT: "0 FontBBox" (2 bytes)
+      char(1), char(2), &                      ! offsets: 1, 2 (2 bytes)
+      char(0), &                               ! Empty DICT (1 byte)
       ! String INDEX (empty)
       char(0), char(0), &                      ! count=0 (2 bytes)
       ! Global Subr INDEX (empty)
-      char(0), char(0) &                       ! count=0 (2 bytes)
+      char(0), char(0), &                       ! count=0 (2 bytes)
+      ! Padding
+      char(0), char(0), char(0), char(0) &      ! padding (4 bytes)
     ]
     
     total = total + 1

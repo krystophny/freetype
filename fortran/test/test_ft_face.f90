@@ -313,8 +313,8 @@ contains
     call write_int32_be(unit, TTAG_cmap)
     call write_int32_be(unit, int(z'34567890', int32))
     call write_int32_be(unit, int(offset, int32))
-    call write_int32_be(unit, 100_int32)
-    offset = offset + 100
+    call write_int32_be(unit, 52_int32)
+    offset = offset + 52
     
     ! loca table
     call write_int32_be(unit, TTAG_loca)
@@ -327,7 +327,7 @@ contains
     call write_int32_be(unit, TTAG_hmtx)
     call write_int32_be(unit, int(z'56789012', int32))
     call write_int32_be(unit, int(offset, int32))
-    call write_int32_be(unit, 16_int32)  ! 3 metrics * 4 bytes + 2 LSBs * 2 bytes
+    call write_int32_be(unit, 16_int32)  ! 3 metrics * 4 bytes + 2 LSBs * 2 bytes = 16 bytes
     
     ! Write head table
     call write_int32_be(unit, int(z'00010000', int32))  ! version
