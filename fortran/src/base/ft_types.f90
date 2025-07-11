@@ -69,6 +69,7 @@ module ft_types
   public :: FT_Err_Cannot_Open_Stream
   public :: FT_Err_Invalid_Stream_Seek
   public :: FT_Err_Invalid_Stream_Skip
+  public :: FT_Err_Invalid_Stream_Read
 
   ! Type definitions
   
@@ -114,6 +115,7 @@ module ft_types
   integer(FT_Error), parameter :: FT_Err_Invalid_Pixel_Size       = 23
   integer(FT_Error), parameter :: FT_Err_Invalid_SVG_Document     = 24
   
+  
   ! Handle errors
   integer(FT_Error), parameter :: FT_Err_Invalid_Handle           = 32
   integer(FT_Error), parameter :: FT_Err_Invalid_Library_Handle   = 33
@@ -137,6 +139,7 @@ module ft_types
   integer(FT_Error), parameter :: FT_Err_Cannot_Open_Stream       = 81
   integer(FT_Error), parameter :: FT_Err_Invalid_Stream_Seek      = 82
   integer(FT_Error), parameter :: FT_Err_Invalid_Stream_Skip      = 83
+  integer(FT_Error), parameter :: FT_Err_Invalid_Stream_Read      = 84
 
 contains
 
