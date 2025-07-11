@@ -204,8 +204,8 @@ contains
     character(len=*), parameter :: ascii_content = '%!PS-AdobeFont-1.0: TestFont' // char(10)
     character(len=*), parameter :: binary_content = 'Binary data here'
     character(len=*), parameter :: pfb_data = &
-      char(128) // char(1) // char(28) // char(0) // char(0) // char(0) // & ! ASCII segment header (28 bytes)
-      ascii_content // &                                                   ! ASCII content (28 bytes)
+      char(128) // char(1) // char(29) // char(0) // char(0) // char(0) // & ! ASCII segment header (29 bytes)
+      ascii_content // &                                                   ! ASCII content (29 bytes)
       char(128) // char(2) // char(16) // char(0) // char(0) // char(0) // & ! Binary segment header (16 bytes)
       binary_content // &                                                  ! Binary content (16 bytes)
       char(128) // char(3) // char(0) // char(0) // char(0) // char(0)     ! EOF marker
@@ -239,13 +239,13 @@ contains
             parser%segments(2)%segment_type, parser%segments(2)%length
       
       if (parser%segments(1)%segment_type == 1 .and. &
-          parser%segments(1)%length == 28 .and. &
+          parser%segments(1)%length == 29 .and. &
           parser%segments(2)%segment_type == 2 .and. &
           parser%segments(2)%length == 16) then
         print '("  Segment parsing: PASS")'
       else
         print '("  Segment parsing: FAIL")'
-        print '("    Expected: seg1(type=1, len=28), seg2(type=2, len=16)")'
+        print '("    Expected: seg1(type=1, len=29), seg2(type=2, len=16)")'
         call ft_type1_parser_done(parser)
         return
       end if

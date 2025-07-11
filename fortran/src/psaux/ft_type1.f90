@@ -305,7 +305,7 @@ contains
       ! Check for segment marker
       if (pos + 6 > parser%data_length) exit
       if (ichar(parser%data(pos:pos)) /= 128) then
-        print '("DEBUG: Expected marker 128 at pos ", I0, " but got ", I0)', pos, ichar(parser%data(pos:pos))
+        ! print '("DEBUG: Expected marker 128 at pos ", I0, " but got ", I0)', pos, ichar(parser%data(pos:pos))
         exit
       end if
       
@@ -319,8 +319,8 @@ contains
                       ichar(parser%data(pos+4:pos+4)) * 65536 + &
                       ichar(parser%data(pos+5:pos+5)) * 16777216
       
-      print '("DEBUG: Segment ", I0, " type=", I0, " length=", I0, " offset=", I0)', &
-            parser%num_segments + 1, segment_type, segment_length, pos + 6
+      ! print '("DEBUG: Segment ", I0, " type=", I0, " length=", I0, " offset=", I0)', &
+      !       parser%num_segments + 1, segment_type, segment_length, pos + 6
       
       ! Store segment information
       parser%num_segments = parser%num_segments + 1
