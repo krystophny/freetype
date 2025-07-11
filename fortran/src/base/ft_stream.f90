@@ -90,6 +90,7 @@ module ft_stream
     integer(c_size_t) :: pos = 0            ! Current position
     integer :: flags = FT_STREAM_FLAG_NONE   ! Stream flags
     logical :: is_open = .false.            ! Stream state
+    character(len=1), allocatable :: memory_buffer(:)  ! Memory buffer for memory streams
   end type FT_Stream_Rec
   
   ! Stream handle type
@@ -168,8 +169,13 @@ contains
     
     if (.not. associated(stream%rec)) return
     
-    if (stream%rec%is_open .and. c_associated(stream%rec%handle)) then
-      if (stream%rec%flags == FT_STREAM_FLAG_NONE) then
+    if (stream%rec%is_open) then
+      if (stream%rec%flags == FT_STREAM_FLAG_MEMORY) then
+        ! Clean up memory buffer
+        if (allocated(stream%rec%memory_buffer)) then
+          deallocate(stream%rec%memory_buffer)
+        end if
+      else if (c_associated(stream%rec%handle)) then
         ! Close file handle
         i = c_fclose(stream%rec%handle)
       end if
@@ -187,6 +193,9 @@ contains
     integer(FT_Error), intent(out) :: error
     integer(c_size_t) :: bytes_read
     
+    integer(int8), pointer :: byte_buffer(:)
+    integer :: i, available
+    
     bytes_read = 0
     error = FT_Err_Ok
     
@@ -200,17 +209,42 @@ contains
       return
     end if
     
-    ! Read from file
-    bytes_read = c_fread(buffer, 1_c_size_t, count, stream%rec%handle)
-    
-    if (bytes_read < count) then
-      if (bytes_read == 0) then
-        error = FT_Err_Invalid_Stream_Read
+    if (stream%rec%flags == FT_STREAM_FLAG_MEMORY) then
+      ! Read from memory buffer
+      if (.not. allocated(stream%rec%memory_buffer)) then
+        error = FT_Err_Invalid_Stream_Handle
+        return
       end if
+      
+      ! Check how many bytes are available
+      available = int(stream%rec%size - stream%rec%pos)
+      bytes_read = min(int(count, c_size_t), int(available, c_size_t))
+      
+      if (bytes_read > 0) then
+        ! Convert C pointer to Fortran pointer
+        call c_f_pointer(buffer, byte_buffer, [int(bytes_read)])
+        
+        ! Copy data from memory buffer (adjust for 1-based indexing)
+        do i = 1, int(bytes_read)
+          byte_buffer(i) = ichar(stream%rec%memory_buffer(int(stream%rec%pos) + i), int8)
+        end do
+        
+        ! Update position
+        stream%rec%pos = stream%rec%pos + bytes_read
+      end if
+    else
+      ! Read from file
+      bytes_read = c_fread(buffer, 1_c_size_t, count, stream%rec%handle)
+      
+      if (bytes_read < count) then
+        if (bytes_read == 0) then
+          error = FT_Err_Invalid_Stream_Read
+        end if
+      end if
+      
+      ! Update position
+      stream%rec%pos = stream%rec%pos + bytes_read
     end if
-    
-    ! Update position
-    stream%rec%pos = stream%rec%pos + bytes_read
     
   end function ft_stream_read
   
@@ -343,11 +377,18 @@ contains
       return
     end if
     
-    if (c_fseek(stream%rec%handle, int(offset, c_long), SEEK_SET) == 0) then
+    if (stream%rec%flags == FT_STREAM_FLAG_MEMORY) then
+      ! For memory streams, just update the position
       stream%rec%pos = offset
       success = .true.
     else
-      error = FT_Err_Invalid_Stream_Seek
+      ! For file streams, use fseek
+      if (c_fseek(stream%rec%handle, int(offset, c_long), SEEK_SET) == 0) then
+        stream%rec%pos = offset
+        success = .true.
+      else
+        error = FT_Err_Invalid_Stream_Seek
+      end if
     end if
     
   end function ft_stream_seek
@@ -386,6 +427,8 @@ contains
     integer(FT_Error), intent(out) :: error
     logical :: success
     
+    integer :: i
+    
     success = .false.
     error = FT_Err_Ok
     
@@ -399,9 +442,11 @@ contains
     stream%rec%flags = FT_STREAM_FLAG_MEMORY
     stream%rec%is_open = .true.
     
-    ! For memory streams, we'll need to store the buffer reference
-    ! This is a simplified implementation - in practice, we'd need
-    ! to properly manage the memory buffer
+    ! Allocate and copy the memory buffer
+    allocate(stream%rec%memory_buffer(size))
+    do i = 1, size
+      stream%rec%memory_buffer(i) = buffer(i:i)
+    end do
     
     success = .true.
     

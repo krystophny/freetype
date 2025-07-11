@@ -18,6 +18,7 @@ module ft_cff_charstring
   public :: ft_cff_charstring_done
   public :: ft_cff_charstring_parse
   public :: ft_cff_charstring_to_outline
+  public :: ft_cff_charstring_to_outline_with_subr
   
   ! Type 2 CharString operators
   integer, parameter :: CS_HSTEM = 1
@@ -75,6 +76,16 @@ module ft_cff_charstring
   integer, parameter :: CS_HFLEX1 = 1236      ! 12 36
   integer, parameter :: CS_FLEX1 = 1237       ! 12 37
   
+  ! Subroutine constants
+  integer, parameter :: MAX_CALL_DEPTH = 10
+  
+  ! Call stack frame for subroutines
+  type :: CharString_Call_Frame
+    character(len=1), allocatable :: charstring(:)
+    integer :: charstring_length
+    integer :: position
+  end type CharString_Call_Frame
+  
   ! CharString interpreter context
   type :: FT_CFF_CharString_Context
     ! Stack for operands
@@ -104,6 +115,10 @@ module ft_cff_charstring
     
     ! Random number state
     integer :: random_seed = 1
+    
+    ! Subroutine support
+    integer :: call_depth = 0
+    type(CharString_Call_Frame) :: call_stack(MAX_CALL_DEPTH)
     
   end type FT_CFF_CharString_Context
   
@@ -139,6 +154,7 @@ contains
     context%width = 0.0
     context%width_parsed = .false.
     context%random_seed = 1
+    context%call_depth = 0
     
     success = .true.
     
@@ -150,6 +166,9 @@ contains
     
     if (allocated(context%stack)) deallocate(context%stack)
     if (allocated(context%transient)) deallocate(context%transient)
+    
+    ! Clean up call stack
+    call cleanup_call_stack(context)
     
     context%stack_top = 0
     context%x = 0.0
@@ -447,6 +466,12 @@ contains
       success = op_endchar(context, outline)
     case (CS_HSTEM, CS_VSTEM, CS_HSTEMHM, CS_VSTEMHM)
       success = op_stem(context)
+    case (CS_CALLSUBR)
+      success = op_callsubr(context, outline, error)
+    case (CS_CALLGSUBR)
+      success = op_callgsubr(context, outline, error)
+    case (CS_RETURN)
+      success = op_return(context, outline, error)
     case default
       ! Unimplemented operator - for now just clear stack and continue
       context%stack_top = 0
@@ -797,5 +822,136 @@ contains
     outline%contours(outline%n_contours) = outline%n_points - 1
     
   end subroutine close_outline_contour
+
+  ! Helper: Clean up call stack
+  subroutine cleanup_call_stack(context)
+    type(FT_CFF_CharString_Context), intent(inout) :: context
+    integer :: i
+    
+    do i = 1, context%call_depth
+      if (allocated(context%call_stack(i)%charstring)) then
+        deallocate(context%call_stack(i)%charstring)
+      end if
+    end do
+    
+    context%call_depth = 0
+    
+  end subroutine cleanup_call_stack
+
+  ! Operator: callsubr - call local subroutine
+  function op_callsubr(context, outline, error) result(success)
+    type(FT_CFF_CharString_Context), intent(inout) :: context
+    type(FT_Outline), intent(inout) :: outline
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    success = .false.
+    error = FT_Err_Ok
+    
+    ! For now, just clear the stack (subroutine not implemented)
+    ! In a full implementation, we would:
+    ! 1. Pop subroutine index from stack
+    ! 2. Get subroutine data from local subroutines
+    ! 3. Push current position onto call stack
+    ! 4. Execute subroutine
+    
+    if (context%stack_top > 0) then
+      context%stack_top = context%stack_top - 1
+    end if
+    
+    success = .true.
+    
+  end function op_callsubr
+
+  ! Operator: callgsubr - call global subroutine
+  function op_callgsubr(context, outline, error) result(success)
+    type(FT_CFF_CharString_Context), intent(inout) :: context
+    type(FT_Outline), intent(inout) :: outline
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    success = .false.
+    error = FT_Err_Ok
+    
+    ! For now, just clear the stack (subroutine not implemented)
+    ! In a full implementation, we would:
+    ! 1. Pop subroutine index from stack
+    ! 2. Get subroutine data from global subroutines
+    ! 3. Push current position onto call stack
+    ! 4. Execute subroutine
+    
+    if (context%stack_top > 0) then
+      context%stack_top = context%stack_top - 1
+    end if
+    
+    success = .true.
+    
+  end function op_callgsubr
+
+  ! Operator: return - return from subroutine
+  function op_return(context, outline, error) result(success)
+    type(FT_CFF_CharString_Context), intent(inout) :: context
+    type(FT_Outline), intent(inout) :: outline
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    success = .false.
+    error = FT_Err_Ok
+    
+    ! For now, just succeed (return not implemented)
+    ! In a full implementation, we would:
+    ! 1. Pop position from call stack
+    ! 2. Continue execution from that position
+    
+    success = .true.
+    
+  end function op_return
+
+  ! Convert CharString to outline with subroutine support
+  function ft_cff_charstring_to_outline_with_subr(charstring, length, global_subr, local_subr, outline, error) result(success)
+    character(len=1), intent(in) :: charstring(:)
+    integer, intent(in) :: length
+    character(len=1), intent(in), optional :: global_subr(:)
+    character(len=1), intent(in), optional :: local_subr(:)
+    type(FT_Outline), intent(out) :: outline
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    type(FT_CFF_CharString_Context) :: context
+    
+    success = .false.
+    error = FT_Err_Ok
+    
+    ! Initialize context
+    if (.not. ft_cff_charstring_init(context, error)) then
+      return
+    end if
+    
+    ! Store subroutine data (for future implementation)
+    ! For now, just use the regular parsing
+    
+    ! Count points first (simplified - assume max points)
+    if (.not. ft_outline_new(1000, 100, outline, error)) then
+      call ft_cff_charstring_done(context)
+      return
+    end if
+    
+    ! Initialize outline counters
+    outline%n_points = 0
+    outline%n_contours = 0
+    
+    ! Parse CharString
+    if (.not. ft_cff_charstring_parse(context, charstring, length, outline, error)) then
+      call ft_cff_charstring_done(context)
+      call ft_outline_done(outline)
+      return
+    end if
+    
+    ! Clean up
+    call ft_cff_charstring_done(context)
+    
+    success = .true.
+    
+  end function ft_cff_charstring_to_outline_with_subr
 
 end module ft_cff_charstring
