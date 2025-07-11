@@ -12,6 +12,7 @@ module ft_cff
   public :: FT_CFF_Header
   public :: FT_CFF_INDEX
   public :: FT_CFF_DICT
+  public :: FT_CFF_DICT_Entry
   public :: FT_CFF_Parser
   
   ! Public functions
@@ -21,6 +22,14 @@ module ft_cff
   public :: ft_cff_parse_header
   public :: ft_cff_parse_index
   public :: ft_cff_parse_dict
+  
+  ! Public constants
+  public :: CFF_OP_VERSION
+  public :: CFF_OP_NOTICE
+  public :: CFF_OP_FULLNAME
+  public :: CFF_OP_FAMILYNAME
+  public :: CFF_OP_WEIGHT
+  public :: CFF_OP_FONTBBOX
   
   ! CFF constants
   integer, parameter :: CFF_VERSION_1_0 = 1
