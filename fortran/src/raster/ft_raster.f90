@@ -24,7 +24,11 @@ module ft_raster
   ! Constants
   integer, parameter :: FT_RASTER_CELL_POOL_SIZE = 1024
   integer, parameter :: FT_PIXEL_BITS = 8     ! 8 subpixels per pixel
-  integer, parameter :: FT_ONE_PIXEL = ishft(1, FT_PIXEL_BITS)
+  integer, parameter :: FT_ONE_PIXEL = ishft(1, FT_PIXEL_BITS)  ! 256
+  
+  ! Fill rule constants
+  integer, parameter :: FT_FILL_EVEN_ODD = 256  ! 0x100
+  integer, parameter :: FT_FILL_NON_ZERO = int(z'80000000')  ! INT_MIN
   
 contains
 
@@ -253,59 +257,120 @@ contains
     
   end function ft_raster_render_outline
   
-  ! Render accumulated cells to bitmap
+  ! Render accumulated cells to bitmap using FreeType sweep algorithm
   subroutine render_cells_to_bitmap(raster)
     type(FT_Raster_State), intent(inout) :: raster
     
-    integer :: y, x, ey
+    integer :: y, x, ey, fill_x
     type(FT_Raster_Cell), pointer :: cell
-    integer :: area, coverage
-    logical :: pixel_on
+    integer :: area, coverage, cover
     
     if (.not. associated(raster%target)) return
     if (.not. associated(raster%ycells)) return
     
-    ! Process each scanline
+    ! Process each scanline with proper FreeType sweep algorithm
     do y = raster%min_ey, raster%max_ey - 1
       ey = y - raster%min_ey + 1
+      
+      ! Initialize running coverage accumulator and position
+      cover = 0
+      x = raster%min_ex
       
       ! Process cells in this scanline
       cell => raster%ycells(ey)%next
       
+      ! print '("DEBUG sweep y=", I0, " initial cover=", I0, " x=", I0)', y, cover, x
+      
       do while (associated(cell))
-        x = cell%x
-        
-        ! Check if cell has coverage
-        if (cell%cover /= 0 .or. cell%area /= 0) then
-          ! Check rendering mode
-          if (iand(raster%flags, FT_RASTER_FLAG_AA) /= 0 .and. &
-              raster%target%pixel_mode == FT_PIXEL_MODE_GRAY) then
-            ! Anti-aliased rendering - fixed implementation
-            ! Combine cover and area for proper FreeType-compatible AA
+        ! print '("DEBUG cell: x=", I0, " cover=", I0, " area=", I0)', cell%x, cell%cover, cell%area
+        ! Check rendering mode
+        if (iand(raster%flags, FT_RASTER_FLAG_AA) /= 0 .and. &
+            raster%target%pixel_mode == FT_PIXEL_MODE_GRAY) then
+          ! ANTIALIASED RENDERING with proper FreeType algorithm
+          
+          ! INTERIOR FILLING: Fill span between edges if inside shape
+          if (cover /= 0 .and. cell%x > x) then
+            ! Apply FreeType FT_FILL_RULE
+            call ft_fill_rule(coverage, cover, FT_FILL_NON_ZERO)
             
-            ! Calculate total coverage: cover represents edge crossings, area represents filled regions
-            coverage = abs(cell%cover) + abs(cell%area) / 256
-            
-            ! Clamp to valid grayscale range and ensure minimum visibility
-            if (coverage > 0) then
-              coverage = min(255, max(16, coverage))  ! Minimum 16 for visibility
-            else
-              coverage = 0
-            end if
-            
-            ! Set grayscale pixel
-            call ft_bitmap_set_pixel_gray(raster%target, x, y, coverage)
-          else
-            ! Monochrome rendering
-            call ft_bitmap_set_pixel(raster%target, x, y, .true.)
+            ! Fill horizontal span from x to cell%x - 1
+            do fill_x = x, cell%x - 1
+              if (fill_x >= raster%min_ex .and. fill_x < raster%max_ex) then
+                call ft_bitmap_set_pixel_gray(raster%target, fill_x, y, coverage)
+              end if
+            end do
+          end if
+          
+          ! ACCUMULATE COVERAGE: Update running total (FreeType uses ONE_PIXEL * 2 = 512)
+          ! Note: Our coordinates are in 26.6 format, need to scale to FreeType's 8.8 format
+          ! Convert: 26.6 -> 8.8 by multiplying by 4 (64->256 scale factor)
+          cover = cover + cell%cover * 4
+          area = cell%area
+          
+          ! EDGE RENDERING: Render the edge pixel itself
+          if (area /= 0 .and. cell%x >= raster%min_ex .and. cell%x < raster%max_ex) then
+            ! Apply FreeType FT_FILL_RULE
+            call ft_fill_rule(coverage, area, FT_FILL_NON_ZERO)
+            call ft_bitmap_set_pixel_gray(raster%target, cell%x, y, coverage)
+          end if
+          
+        else
+          ! MONOCHROME RENDERING (simple cell-based)
+          if (cell%cover /= 0 .or. cell%area /= 0) then
+            call ft_bitmap_set_pixel(raster%target, cell%x, y, .true.)
           end if
         end if
         
+        ! Move to next position
+        x = cell%x + 1
         cell => cell%next
       end do
+      
+      ! FINAL FILL: Fill remaining span if still inside shape (AA only)
+      if (iand(raster%flags, FT_RASTER_FLAG_AA) /= 0 .and. &
+          raster%target%pixel_mode == FT_PIXEL_MODE_GRAY .and. &
+          cover /= 0) then
+        ! Apply FreeType FT_FILL_RULE with proper scaling
+        call ft_fill_rule(coverage, cover, FT_FILL_NON_ZERO)
+        
+        do fill_x = x, raster%max_ex - 1
+          call ft_bitmap_set_pixel_gray(raster%target, fill_x, y, coverage)
+        end do
+      end if
     end do
     
   end subroutine render_cells_to_bitmap
+  
+  ! Apply FreeType FT_FILL_RULE - exact implementation of the C macro
+  subroutine ft_fill_rule(coverage, area, fill)
+    integer, intent(out) :: coverage
+    integer, intent(in) :: area
+    integer, intent(in) :: fill
+    
+    ! DEBUG: Print area value to understand what we're getting
+    ! print '("DEBUG: area=", I0, " fill=", I0)', area, fill
+    
+    ! coverage = area >> (PIXEL_BITS * 2 + 1 - 8)
+    ! With PIXEL_BITS = 8: area >> (8*2 + 1 - 8) = area >> 9
+    coverage = ishft(area, -9)
+    
+    ! if (coverage & fill) coverage = ~coverage
+    if (iand(coverage, fill) /= 0) then
+      coverage = not(coverage)
+    end if
+    
+    ! if (coverage > 255 && fill & INT_MIN) coverage = 255
+    if (coverage > 255 .and. iand(fill, FT_FILL_NON_ZERO) /= 0) then
+      coverage = 255
+    end if
+    
+    ! Ensure coverage is in valid range [0, 255]
+    coverage = max(0, min(255, coverage))
+    
+    ! DEBUG: Show final coverage
+    ! print '("DEBUG: final coverage=", I0)', coverage
+    
+  end subroutine ft_fill_rule
   
   ! Render outline using scanline conversion
   function ft_raster_render_outline_scanline(outline, bitmap, error) result(success)

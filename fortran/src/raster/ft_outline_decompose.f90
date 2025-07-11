@@ -275,16 +275,17 @@ contains
     
   end subroutine raster_line_mono
   
-  ! Antialiased line rasterizer with proper coverage calculation
+  ! Antialiased line rasterizer with proper FreeType coverage calculation
   subroutine raster_line_aa(raster, from, to)
     type(FT_Raster_State), intent(inout) :: raster
     type(FT_Vector), intent(in) :: from, to
     
-    integer :: x0, y0, x1, y1  ! Pixel coordinates
-    integer :: fx0, fy0, fx1, fy1  ! Fixed-point coordinates
-    integer :: dx, dy, y, x
-    integer :: area, delta_y
-    real :: slope
+    integer :: fx0, fy0, fx1, fy1  ! Fixed-point coordinates (26.6 format)
+    integer :: dx, dy, px, py
+    integer :: ex0, ey0, ex1, ey1  ! Pixel coordinates
+    integer :: fx, fy, deltax, deltay
+    integer :: area, cover
+    integer :: y, x_start, x_end
     
     ! Get coordinates in 26.6 fixed point
     fx0 = from%x
@@ -293,46 +294,56 @@ contains
     fy1 = to%y
     
     ! Convert to pixel coordinates
-    x0 = fx0 / 64
-    y0 = fy0 / 64
-    x1 = fx1 / 64
-    y1 = fy1 / 64
+    ex0 = fx0 / 64
+    ey0 = fy0 / 64
+    ex1 = fx1 / 64
+    ey1 = fy1 / 64
     
     ! Skip horizontal lines (no vertical contribution)
-    if (y0 == y1) then
+    if (ey0 == ey1) then
       return
     end if
     
     ! Ensure y0 < y1 for scanline processing
-    if (y0 > y1) then
+    if (ey0 > ey1) then
       ! Swap endpoints
       call swap_points(fx0, fy0, fx1, fy1)
-      call swap_ints(x0, y0, x1, y1)
+      call swap_ints(ex0, ey0, ex1, ey1)
     end if
     
     dy = fy1 - fy0
     dx = fx1 - fx0
     
     ! For each scanline intersected by the line
-    do y = y0, y1 - 1
-      ! Calculate x intersection at middle of current scanline
+    do y = ey0, ey1 - 1
+      ! Calculate x intersection at top and bottom of current scanline
+      ! Top edge: y * 64
+      ! Bottom edge: (y + 1) * 64
+      
       if (dy /= 0) then
-        ! Simple linear interpolation
-        x = fx0 + (fx1 - fx0) * (y * 64 + 32 - fy0) / dy
+        ! X position at top of scanline
+        x_start = fx0 + dx * (y * 64 - fy0) / dy
+        ! X position at bottom of scanline
+        x_end = fx0 + dx * ((y + 1) * 64 - fy0) / dy
       else
-        x = fx0
+        x_start = fx0
+        x_end = fx0
       end if
       
       ! Convert to pixel coordinates
-      x = x / 64
+      px = x_start / 64
       
-      ! Calculate coverage contribution
-      ! For now, use simple edge crossing (1) and area based on x position
-      delta_y = 1
-      area = abs(x - x0)  ! Simple area approximation
+      ! Calculate coverage contribution using FreeType method
+      ! Cover = vertical delta (always 1 scanline = 64 units in 26.6 format)
+      cover = 64
+      
+      ! Area = integral of line segment within this pixel cell
+      ! For a line segment, area = (x_start + x_end) * height / 2
+      ! In 26.6 format: height = 64, so area = (x_start + x_end) * 64 / 2
+      area = (x_start + x_end) * 64 / 2
       
       ! Accumulate in raster cell
-      call accumulate_cell(raster, x, y, delta_y, area)
+      call accumulate_cell(raster, px, y, cover, area)
     end do
     
   end subroutine raster_line_aa
@@ -365,9 +376,15 @@ contains
     integer :: ey
     type(FT_Raster_Cell), pointer :: cell, prev_cell
     
+    ! print '("DEBUG accumulate_cell: x=", I0, " y=", I0, " cover=", I0, " area=", I0)', x, y, cover, area
+    
     ! Check bounds
-    if (y < raster%min_ey .or. y >= raster%max_ey) return
-    if (x < raster%min_ex .or. x >= raster%max_ex) return
+    if (y < raster%min_ey .or. y >= raster%max_ey) then
+      return
+    end if
+    if (x < raster%min_ex .or. x > raster%max_ex) then
+      return
+    end if
     
     ! Get y index
     ey = y - raster%min_ey + 1
