@@ -213,9 +213,12 @@ contains
     type(FT_Raster_State), intent(inout) :: raster
     type(FT_Vector), intent(in) :: from, to
     
-    ! For now, use the monochrome rasterizer for both modes
-    ! The antialiasing will be handled in the coverage calculation
-    call raster_line_mono(raster, from, to)
+    ! Check if antialiasing is enabled
+    if (iand(raster%flags, FT_RASTER_FLAG_AA) /= 0) then
+      call raster_line_aa(raster, from, to)
+    else
+      call raster_line_mono(raster, from, to)
+    end if
     
   end subroutine raster_line_to
   
@@ -289,19 +292,14 @@ contains
     fx1 = to%x
     fy1 = to%y
     
-    print '("DEBUG: AA line from (", I0, ",", I0, ") to (", I0, ",", I0, ")")', fx0, fy0, fx1, fy1
-    
     ! Convert to pixel coordinates
     x0 = fx0 / 64
     y0 = fy0 / 64
     x1 = fx1 / 64
     y1 = fy1 / 64
     
-    print '("DEBUG: Pixel coords: (", I0, ",", I0, ") to (", I0, ",", I0, ")")', x0, y0, x1, y1
-    
     ! Skip horizontal lines (no vertical contribution)
     if (y0 == y1) then
-      print '("DEBUG: Skipping horizontal line")'
       return
     end if
     
@@ -310,33 +308,31 @@ contains
       ! Swap endpoints
       call swap_points(fx0, fy0, fx1, fy1)
       call swap_ints(x0, y0, x1, y1)
-      print '("DEBUG: Swapped endpoints")'
     end if
     
     dy = fy1 - fy0
     dx = fx1 - fx0
     
-    print '("DEBUG: Processing scanlines ", I0, " to ", I0)', y0, y1-1
-    
     ! For each scanline intersected by the line
     do y = y0, y1 - 1
-      ! Calculate x intersection at bottom of current scanline
+      ! Calculate x intersection at middle of current scanline
       if (dy /= 0) then
-        ! Use fixed-point arithmetic for precision
-        x = (fx0 * (64 * (y + 1) - fy0) + fx1 * (fy0 - 64 * y)) / dy
+        ! Simple linear interpolation
+        x = fx0 + (fx1 - fx0) * (y * 64 + 32 - fy0) / dy
       else
         x = fx0
       end if
       
-      ! Calculate coverage contribution
-      ! This is a simplified version - proper coverage calculation is complex
-      delta_y = min(fy1, 64 * (y + 1)) - max(fy0, 64 * y)
-      area = (x / 64) * delta_y / 64  ! Approximate area
+      ! Convert to pixel coordinates
+      x = x / 64
       
-      print '("DEBUG: y=", I0, " x=", I0, " delta_y=", I0, " area=", I0)', y, x/64, delta_y/64, area
+      ! Calculate coverage contribution
+      ! For now, use simple edge crossing (1) and area based on x position
+      delta_y = 1
+      area = abs(x - x0)  ! Simple area approximation
       
       ! Accumulate in raster cell
-      call accumulate_cell(raster, x / 64, y, delta_y / 64, area)
+      call accumulate_cell(raster, x, y, delta_y, area)
     end do
     
   end subroutine raster_line_aa

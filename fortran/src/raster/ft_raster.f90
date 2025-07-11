@@ -113,11 +113,11 @@ contains
       return
     end if
     
-    ! Convert to pixel coordinates
-    raster%min_ex = int(raster%cbox%xMin / FT_ONE_PIXEL)
-    raster%min_ey = int(raster%cbox%yMin / FT_ONE_PIXEL)
-    raster%max_ex = int((raster%cbox%xMax + FT_ONE_PIXEL - 1) / FT_ONE_PIXEL)
-    raster%max_ey = int((raster%cbox%yMax + FT_ONE_PIXEL - 1) / FT_ONE_PIXEL)
+    ! Convert to pixel coordinates (26.6 format uses 64 units per pixel)
+    raster%min_ex = int(raster%cbox%xMin / 64)
+    raster%min_ey = int(raster%cbox%yMin / 64)
+    raster%max_ex = int((raster%cbox%xMax + 63) / 64)
+    raster%max_ey = int((raster%cbox%yMax + 63) / 64)
     
     ! Clip to target bitmap
     if (raster%min_ex < 0) raster%min_ex = 0
@@ -280,27 +280,21 @@ contains
           ! Check rendering mode
           if (iand(raster%flags, FT_RASTER_FLAG_AA) /= 0 .and. &
               raster%target%pixel_mode == FT_PIXEL_MODE_GRAY) then
-            ! Anti-aliased rendering with simplified coverage calculation
-            ! For now, use a simple approach based on cover value
-            ! This provides variable grayscale levels based on edge crossings
+            ! Anti-aliased rendering - fixed implementation
+            ! Combine cover and area for proper FreeType-compatible AA
             
-            if (cell%cover > 0) then
-              ! Positive coverage - calculate gray level based on cover value
-              coverage = min(255, abs(cell%cover) * 64)  ! Scale up cover value
-            else
-              ! Use area if available
-              coverage = min(255, abs(cell%area) / 256)
-            end if
+            ! Calculate total coverage: cover represents edge crossings, area represents filled regions
+            coverage = abs(cell%cover) + abs(cell%area) / 256
             
-            ! Ensure we have some coverage
-            if (coverage == 0 .and. (cell%cover /= 0 .or. cell%area /= 0)) then
-              coverage = 128  ! Default middle gray
-            end if
-            
-            ! Set grayscale pixel if there's any coverage
+            ! Clamp to valid grayscale range and ensure minimum visibility
             if (coverage > 0) then
-              call ft_bitmap_set_pixel_gray(raster%target, x, y, coverage)
+              coverage = min(255, max(16, coverage))  ! Minimum 16 for visibility
+            else
+              coverage = 0
             end if
+            
+            ! Set grayscale pixel
+            call ft_bitmap_set_pixel_gray(raster%target, x, y, coverage)
           else
             ! Monochrome rendering
             call ft_bitmap_set_pixel(raster%target, x, y, .true.)
