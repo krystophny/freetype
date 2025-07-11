@@ -4,6 +4,7 @@ module ft_raster
   use ft_geometry, only: FT_Vector, FT_BBox
   use ft_bitmap_mod
   use ft_outline_mod
+  use ft_outline_decompose_mod
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: int8, int16, int32
   implicit none
@@ -229,18 +230,55 @@ contains
       return
     end if
     
-    ! For now, just clear the target bitmap
+    ! Clear the target bitmap
     call ft_bitmap_clear(target)
     
-    ! TODO: Implement actual scan conversion
-    ! 1. Decompose outline to lines
-    ! 2. Scan convert lines to cells
-    ! 3. Sort cells by y then x
-    ! 4. Render cells to bitmap
+    ! Decompose outline and draw lines
+    if (.not. ft_outline_decompose_simple(outline, raster, error)) then
+      return
+    end if
+    
+    ! Render cells to bitmap
+    call render_cells_to_bitmap(raster)
     
     error = FT_Err_Ok
     success = .true.
     
   end function ft_raster_render_outline
+  
+  ! Render accumulated cells to bitmap
+  subroutine render_cells_to_bitmap(raster)
+    type(FT_Raster_State), intent(inout) :: raster
+    
+    integer :: y, x, ey
+    type(FT_Raster_Cell), pointer :: cell
+    logical :: pixel_on
+    
+    if (.not. associated(raster%target)) return
+    if (.not. associated(raster%ycells)) return
+    
+    ! Process each scanline
+    do y = raster%min_ey, raster%max_ey - 1
+      ey = y - raster%min_ey + 1
+      
+      ! Process cells in this scanline
+      cell => raster%ycells(ey)%next
+      
+      do while (associated(cell))
+        x = cell%x
+        
+        ! Simple rule: if cell has any coverage, turn on pixel
+        pixel_on = (cell%cover /= 0 .or. cell%area /= 0)
+        
+        ! Set pixel in bitmap
+        if (pixel_on) then
+          call ft_bitmap_set_pixel(raster%target, x, y, .true.)
+        end if
+        
+        cell => cell%next
+      end do
+    end do
+    
+  end subroutine render_cells_to_bitmap
 
 end module ft_raster
