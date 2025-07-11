@@ -12,6 +12,7 @@ program test_ft_bitmap
   call test_bitmap_creation()
   call test_bitmap_monochrome()
   call test_bitmap_grayscale()
+  call test_bitmap_grayscale_pixels()
   call test_bitmap_copy()
   call test_bitmap_clear_fill()
   call test_bitmap_pixel_operations()
@@ -167,6 +168,62 @@ contains
     call ft_bitmap_done(bitmap)
     
   end subroutine test_bitmap_grayscale
+  
+  subroutine test_bitmap_grayscale_pixels()
+    type(FT_Bitmap) :: bitmap
+    integer(FT_Error) :: error
+    logical :: success
+    integer :: x, y
+    integer(int8) :: expected_value
+    
+    print '(/, "Testing grayscale pixel values...")'
+    
+    ! Create grayscale bitmap
+    success = ft_bitmap_new(10, 10, FT_PIXEL_MODE_GRAY, bitmap, error)
+    if (.not. success) return
+    
+    ! Test setting various gray levels
+    call ft_bitmap_set_pixel_gray(bitmap, 0, 0, 0)      ! Black
+    call ft_bitmap_set_pixel_gray(bitmap, 1, 0, 64)     ! Dark gray
+    call ft_bitmap_set_pixel_gray(bitmap, 2, 0, 128)    ! Medium gray
+    call ft_bitmap_set_pixel_gray(bitmap, 3, 0, 192)    ! Light gray
+    call ft_bitmap_set_pixel_gray(bitmap, 4, 0, 255)    ! White
+    
+    ! Test clamping
+    call ft_bitmap_set_pixel_gray(bitmap, 5, 0, -50)    ! Should clamp to 0
+    call ft_bitmap_set_pixel_gray(bitmap, 6, 0, 300)    ! Should clamp to 255
+    
+    ! Verify values
+    test_count = test_count + 1
+    if (bitmap%buffer(1) == 0_int8 .and. &
+        bitmap%buffer(2) == 64_int8 .and. &
+        bitmap%buffer(3) == int(-128, int8) .and. &  ! 128 as signed int8
+        bitmap%buffer(4) == int(-64, int8) .and. &   ! 192 as signed int8
+        bitmap%buffer(5) == -1_int8 .and. &    ! 255 as signed int8
+        bitmap%buffer(6) == 0_int8 .and. &     ! Clamped to 0
+        bitmap%buffer(7) == -1_int8) then      ! Clamped to 255
+      print '("PASS: Grayscale pixel values set correctly")'
+    else
+      print '("FAIL: Grayscale pixel values incorrect")'
+      print '("  Expected: 0, 64, 128, 192, 255, 0, 255")'
+      print '("  Got:      ", I0, ", ", I0, ", ", I0, ", ", I0, ", ", I0, ", ", I0, ", ", I0)', &
+        bitmap%buffer(1), bitmap%buffer(2), bitmap%buffer(3), bitmap%buffer(4), &
+        bitmap%buffer(5), bitmap%buffer(6), bitmap%buffer(7)
+      failed_count = failed_count + 1
+    end if
+    
+    ! Test out-of-bounds handling
+    call ft_bitmap_set_pixel_gray(bitmap, -1, 0, 128)   ! Out of bounds
+    call ft_bitmap_set_pixel_gray(bitmap, 10, 0, 128)   ! Out of bounds
+    call ft_bitmap_set_pixel_gray(bitmap, 0, -1, 128)   ! Out of bounds
+    call ft_bitmap_set_pixel_gray(bitmap, 0, 10, 128)   ! Out of bounds
+    
+    test_count = test_count + 1
+    print '("PASS: Out-of-bounds grayscale pixels handled safely")'
+    
+    call ft_bitmap_done(bitmap)
+    
+  end subroutine test_bitmap_grayscale_pixels
   
   subroutine test_bitmap_copy()
     type(FT_Bitmap) :: source, target

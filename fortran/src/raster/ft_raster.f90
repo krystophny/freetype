@@ -2,7 +2,8 @@ module ft_raster
   use ft_types
   use ft_raster_types
   use ft_geometry, only: FT_Vector, FT_BBox
-  use ft_bitmap_mod
+  use ft_bitmap_mod, only: FT_Bitmap, ft_bitmap_set_pixel, ft_bitmap_set_pixel_gray, &
+                           ft_bitmap_clear, FT_PIXEL_MODE_GRAY
   use ft_outline_mod
   use ft_outline_decompose_mod
   use ft_scanline
@@ -206,7 +207,7 @@ contains
     
   end subroutine ft_raster_set_cell
   
-  ! Main outline rendering function (placeholder)
+  ! Main outline rendering function
   function ft_raster_render_outline(raster, params, error) result(success)
     type(FT_Raster_State), intent(inout) :: raster
     type(FT_Raster_Params), intent(in) :: params
@@ -227,6 +228,9 @@ contains
       error = FT_Err_Invalid_Argument
       return
     end if
+    
+    ! Store flags for rendering mode
+    raster%flags = params%flags
     
     ! Reset rasterizer
     if (.not. ft_raster_reset(raster, outline, target, error)) then
@@ -255,6 +259,7 @@ contains
     
     integer :: y, x, ey
     type(FT_Raster_Cell), pointer :: cell
+    integer :: area, coverage
     logical :: pixel_on
     
     if (.not. associated(raster%target)) return
@@ -270,12 +275,20 @@ contains
       do while (associated(cell))
         x = cell%x
         
-        ! Simple rule: if cell has any coverage, turn on pixel
-        pixel_on = (cell%cover /= 0 .or. cell%area /= 0)
-        
-        ! Set pixel in bitmap
-        if (pixel_on) then
-          call ft_bitmap_set_pixel(raster%target, x, y, .true.)
+        ! Check if cell has coverage
+        if (cell%cover /= 0 .or. cell%area /= 0) then
+          ! Check rendering mode
+          if (iand(raster%flags, FT_RASTER_FLAG_AA) /= 0 .and. &
+              raster%target%pixel_mode == FT_PIXEL_MODE_GRAY) then
+            ! Anti-aliased rendering
+            ! For now, use simple coverage - just check if cell has any coverage
+            ! TODO: Implement proper subpixel coverage calculation
+            coverage = 128  ! Middle gray for testing
+            call ft_bitmap_set_pixel_gray(raster%target, x, y, coverage)
+          else
+            ! Monochrome rendering
+            call ft_bitmap_set_pixel(raster%target, x, y, .true.)
+          end if
         end if
         
         cell => cell%next

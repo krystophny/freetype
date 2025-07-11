@@ -16,6 +16,7 @@ module ft_bitmap_mod
   public :: ft_bitmap_clear
   public :: ft_bitmap_fill
   public :: ft_bitmap_set_pixel
+  public :: ft_bitmap_set_pixel_gray
   public :: ft_bitmap_get_pixel
   public :: ft_bitmap_convert
   
@@ -253,6 +254,32 @@ contains
     end select
     
   end subroutine ft_bitmap_set_pixel
+  
+  ! Set pixel gray value (0-255)
+  subroutine ft_bitmap_set_pixel_gray(bitmap, x, y, gray_value)
+    type(FT_Bitmap), intent(inout) :: bitmap
+    integer, intent(in) :: x, y, gray_value
+    
+    integer :: byte_offset
+    integer(int8) :: clamped_value
+    
+    ! Bounds check
+    if (x < 0 .or. x >= bitmap%width .or. y < 0 .or. y >= bitmap%rows) return
+    if (.not. associated(bitmap%buffer)) return
+    
+    ! Only works for grayscale mode
+    if (bitmap%pixel_mode /= FT_PIXEL_MODE_GRAY) return
+    
+    ! Clamp gray value to 0-255
+    clamped_value = int(max(0, min(255, gray_value)), int8)
+    
+    ! 8-bit grayscale
+    byte_offset = y * abs(bitmap%pitch) + x + 1
+    if (byte_offset > 0 .and. byte_offset <= size(bitmap%buffer)) then
+      bitmap%buffer(byte_offset) = clamped_value
+    end if
+    
+  end subroutine ft_bitmap_set_pixel_gray
   
   ! Get pixel value (monochrome version)
   function ft_bitmap_get_pixel(bitmap, x, y) result(value)
