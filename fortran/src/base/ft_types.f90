@@ -40,6 +40,7 @@ module ft_types
   public :: FT_Err_Invalid_Argument
   public :: FT_Err_Unimplemented_Feature
   public :: FT_Err_Invalid_Table
+  public :: FT_Err_Invalid_Table_Format
   public :: FT_Err_Invalid_Offset
   public :: FT_Err_Array_Too_Large
   public :: FT_Err_Missing_Module
@@ -99,10 +100,11 @@ module ft_types
   integer(FT_Error), parameter :: FT_Err_Invalid_Argument         = 6
   integer(FT_Error), parameter :: FT_Err_Unimplemented_Feature    = 7
   integer(FT_Error), parameter :: FT_Err_Invalid_Table            = 8
-  integer(FT_Error), parameter :: FT_Err_Invalid_Offset           = 9
-  integer(FT_Error), parameter :: FT_Err_Array_Too_Large          = 10
-  integer(FT_Error), parameter :: FT_Err_Missing_Module           = 11
-  integer(FT_Error), parameter :: FT_Err_Missing_Property         = 12
+  integer(FT_Error), parameter :: FT_Err_Invalid_Table_Format     = 9
+  integer(FT_Error), parameter :: FT_Err_Invalid_Offset           = 10
+  integer(FT_Error), parameter :: FT_Err_Array_Too_Large          = 11
+  integer(FT_Error), parameter :: FT_Err_Missing_Module           = 12
+  integer(FT_Error), parameter :: FT_Err_Missing_Property         = 13
   
   ! Glyph/character errors
   integer(FT_Error), parameter :: FT_Err_Invalid_Glyph_Index      = 16

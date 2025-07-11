@@ -258,8 +258,9 @@ contains
       end if
     end do
     
-    ! Convert from big-endian
-    value = ior(ishft(int(bytes(1), int16), 8), int(bytes(2), int16))
+    ! Convert from big-endian (mask bytes to prevent sign extension)
+    value = ior(ishft(iand(int(bytes(1), int16), int(255, int16)), 8), &
+                iand(int(bytes(2), int16), int(255, int16)))
     
   end function ft_stream_read_short
   
@@ -284,11 +285,11 @@ contains
       end if
     end do
     
-    ! Convert from big-endian
-    value = ior(ior(ior(ishft(int(bytes(1), int32), 24), &
-                        ishft(int(bytes(2), int32), 16)), &
-                        ishft(int(bytes(3), int32), 8)), &
-                        int(bytes(4), int32))
+    ! Convert from big-endian (mask bytes to prevent sign extension)
+    value = ior(ior(ior(ishft(iand(int(bytes(1), int32), 255), 24), &
+                        ishft(iand(int(bytes(2), int32), 255), 16)), &
+                        ishft(iand(int(bytes(3), int32), 255), 8)), &
+                        iand(int(bytes(4), int32), 255))
     
   end function ft_stream_read_long
   
