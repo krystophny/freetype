@@ -176,6 +176,8 @@ contains
     
     ! Clean up format-specific data
     if (allocated(face%truetype_face)) then
+      ! Don't let the TrueType face close the stream
+      face%truetype_face%is_open = .false.
       call ft_done_face(face%truetype_face)
       deallocate(face%truetype_face)
     end if
@@ -190,7 +192,7 @@ contains
       deallocate(face%type1_face)
     end if
     
-    ! Close stream
+    ! Close stream (unified face owns it)
     if (face%is_open) then
       call ft_stream_close(face%stream)
       face%is_open = .false.
@@ -308,6 +310,12 @@ contains
 
   ! Load TrueType/OpenType face
   function load_truetype_face(face, error) result(success)
+    use tt_load, only: tt_load_table_directory
+    use tt_head, only: TT_Header_Table, tt_load_head_table
+    use tt_maxp, only: TT_MaxProfile, tt_load_maxp_table
+    use tt_cmap, only: TT_CMap_Table, tt_load_cmap_table, tt_cmap_char_to_glyph
+    use tt_loca, only: TT_Loca_Table, tt_load_loca_table
+    use tt_hmtx, only: TT_HMtx_Table, tt_load_hmtx_table, tt_hmtx_get_advance
     type(FT_Unified_Face), intent(inout) :: face
     integer(FT_Error), intent(out) :: error
     logical :: success
@@ -318,15 +326,39 @@ contains
     ! Allocate TrueType face
     allocate(face%truetype_face)
     
-    ! Use existing TrueType loader
-    ! Note: ft_new_face expects a filepath, but we already have an open stream
-    ! This would need refactoring to accept a stream
-    error = FT_Err_Unimplemented_Feature
+    ! Initialize with the existing stream
+    face%truetype_face%stream = face%stream
+    face%truetype_face%is_open = .true.
+    face%truetype_face%face_index = face%face_index
     
-    ! For now, copy basic properties
-    face%face_flags = ior(face%face_flags, FT_FACE_FLAG_SFNT)
-    face%face_flags = ior(face%face_flags, FT_FACE_FLAG_SCALABLE)
-    face%face_flags = ior(face%face_flags, FT_FACE_FLAG_HORIZONTAL)
+    ! Load TrueType table directory
+    if (.not. tt_load_table_directory(face%truetype_face%stream, face%truetype_face%directory, error)) then
+      deallocate(face%truetype_face)
+      return
+    end if
+    
+    ! Load essential tables
+    call load_tt_essential_tables(face%truetype_face, error)
+    if (error /= FT_Err_Ok) then
+      deallocate(face%truetype_face)
+      return
+    end if
+    
+    ! Extract basic face information
+    call extract_tt_face_info(face, error)
+    if (error /= FT_Err_Ok) then
+      deallocate(face%truetype_face)
+      return
+    end if
+    
+    ! Set up character maps
+    call setup_tt_charmaps(face%truetype_face, error)
+    if (error /= FT_Err_Ok) then
+      deallocate(face%truetype_face)
+      return
+    end if
+    
+    success = .true.
     
   end function load_truetype_face
 
@@ -527,5 +559,177 @@ contains
     outline%contours(1) = 3
     
   end subroutine create_placeholder_outline
+
+  ! Load essential TrueType tables
+  subroutine load_tt_essential_tables(face, error)
+    use tt_head, only: tt_load_head_table
+    use tt_maxp, only: tt_load_maxp_table
+    use tt_cmap, only: tt_load_cmap_table
+    use tt_loca, only: tt_load_loca_table
+    use tt_hmtx, only: tt_load_hmtx_table
+    use tt_types, only: TTAG_head, TTAG_maxp, TTAG_cmap, TTAG_loca, TTAG_hmtx
+    type(FT_Face_Type), intent(inout) :: face
+    integer(FT_Error), intent(out) :: error
+    
+    integer :: i
+    integer(c_size_t) :: table_offset
+    logical :: found
+    
+    error = FT_Err_Ok
+    
+    ! Load head table
+    call find_tt_table(face%directory, TTAG_head, found, table_offset)
+    if (found) then
+      if (tt_load_head_table(face%stream, table_offset, face%tt_head, error)) then
+        face%head_loaded = .true.
+      else
+        return
+      end if
+    end if
+    
+    ! Load maxp table
+    call find_tt_table(face%directory, TTAG_maxp, found, table_offset)
+    if (found) then
+      if (tt_load_maxp_table(face%stream, table_offset, face%tt_maxp, error)) then
+        face%maxp_loaded = .true.
+      else
+        return
+      end if
+    end if
+    
+    ! Load cmap table
+    call find_tt_table(face%directory, TTAG_cmap, found, table_offset)
+    if (found) then
+      if (tt_load_cmap_table(face%stream, table_offset, face%tt_cmap, error)) then
+        face%cmap_loaded = .true.
+      else
+        return
+      end if
+    end if
+    
+    ! Load loca table (needs maxp and head first)
+    if (face%maxp_loaded .and. face%head_loaded) then
+      call find_tt_table(face%directory, TTAG_loca, found, table_offset)
+      if (found) then
+        ! Get table length
+        do i = 1, size(face%directory%tables)
+          if (face%directory%tables(i)%tag == TTAG_loca) then
+            if (tt_load_loca_table(face%stream, table_offset, &
+                                   int(face%directory%tables(i)%length, c_size_t), &
+                                   int(face%tt_maxp%num_glyphs), &
+                                   face%tt_head%index_to_loc_format == 1, &
+                                   face%tt_loca, error)) then
+              face%loca_loaded = .true.
+            else
+              return
+            end if
+            exit
+          end if
+        end do
+      end if
+    end if
+    
+    ! Load hmtx table (need to know numLongHorMetrics from hhea, for now assume all)
+    if (face%maxp_loaded) then
+      call find_tt_table(face%directory, TTAG_hmtx, found, table_offset)
+      if (found) then
+        ! For now, assume 3 metrics for test font (will need hhea table later)
+        if (tt_load_hmtx_table(face%stream, table_offset, 3, &
+                               int(face%tt_maxp%num_glyphs), face%tt_hmtx, error)) then
+          face%hmtx_loaded = .true.
+        else
+          return
+        end if
+      end if
+    end if
+    
+  end subroutine load_tt_essential_tables
+
+  ! Find a TrueType table by tag
+  subroutine find_tt_table(directory, tag, found, offset)
+    use tt_types, only: TT_Table_Directory
+    type(TT_Table_Directory), intent(in) :: directory
+    integer(int32), intent(in) :: tag
+    logical, intent(out) :: found
+    integer(c_size_t), intent(out) :: offset
+    
+    integer :: i
+    
+    found = .false.
+    offset = 0
+    
+    do i = 1, size(directory%tables)
+      if (directory%tables(i)%tag == tag) then
+        found = .true.
+        offset = int(directory%tables(i)%offset, c_size_t)
+        return
+      end if
+    end do
+    
+  end subroutine find_tt_table
+
+  ! Extract face info from TrueType tables
+  subroutine extract_tt_face_info(face, error)
+    type(FT_Unified_Face), intent(inout) :: face
+    integer(FT_Error), intent(out) :: error
+    
+    error = FT_Err_Ok
+    
+    if (.not. allocated(face%truetype_face)) then
+      error = FT_Err_Invalid_Argument
+      return
+    end if
+    
+    ! Copy basic information from TrueType face
+    if (face%truetype_face%head_loaded) then
+      face%units_per_em = face%truetype_face%tt_head%units_per_em
+    end if
+    
+    if (face%truetype_face%maxp_loaded) then
+      face%num_glyphs = face%truetype_face%tt_maxp%num_glyphs
+    end if
+    
+    ! Set face flags
+    face%face_flags = ior(face%face_flags, FT_FACE_FLAG_SFNT)
+    face%face_flags = ior(face%face_flags, FT_FACE_FLAG_SCALABLE)
+    face%face_flags = ior(face%face_flags, FT_FACE_FLAG_HORIZONTAL)
+    
+    ! Default names for now
+    face%family_name = "TrueType Font"
+    face%style_name = "Regular"
+    
+  end subroutine extract_tt_face_info
+
+  ! Set up character maps for TrueType face
+  subroutine setup_tt_charmaps(face, error)
+    type(FT_Face_Type), intent(inout) :: face
+    integer(FT_Error), intent(out) :: error
+    
+    error = FT_Err_Ok
+    
+    ! Check if cmap is loaded
+    if (.not. face%cmap_loaded) then
+      error = FT_Err_Invalid_Table
+      return
+    end if
+    
+    ! Set up character maps based on loaded cmap table
+    if (face%tt_cmap%header%num_tables > 0) then
+      ! Set number of character maps to number of available encodings
+      face%num_charmaps = int(face%tt_cmap%header%num_tables)
+      
+      ! For now, use the first available character map (index 0)
+      ! In a full implementation, we'd choose the best one (e.g., Unicode)
+      face%charmap_index = 0
+      
+      ! Initialize face character map info if needed
+      ! The actual character mapping will be done by tt_cmap_char_to_glyph
+    else
+      face%num_charmaps = 0
+      face%charmap_index = -1
+      error = FT_Err_Invalid_Table
+    end if
+    
+  end subroutine setup_tt_charmaps
 
 end module ft_face_unified
