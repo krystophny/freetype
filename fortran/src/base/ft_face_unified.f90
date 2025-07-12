@@ -81,7 +81,8 @@ contains
 
   ! Load a TrueType glyph by index
   function load_truetype_glyph(tt_face, glyph_index, outline, error) result(success)
-    use tt_glyph, only: TT_Simple_Glyph, tt_load_glyph_by_index, tt_glyph_to_outline, tt_glyph_free
+    use tt_glyph, only: TT_Simple_Glyph, tt_load_glyph_by_index_with_offset, tt_glyph_to_outline, tt_glyph_free
+    use tt_types, only: TTAG_glyf
     type(FT_Face_Type), intent(inout) :: tt_face
     integer, intent(in) :: glyph_index
     type(FT_Outline), intent(out) :: outline
@@ -89,6 +90,9 @@ contains
     logical :: success
     
     type(TT_Simple_Glyph) :: glyph
+    integer(c_size_t) :: glyf_offset
+    logical :: found
+    integer :: i
     
     success = .false.
     error = FT_Err_Ok
@@ -99,8 +103,25 @@ contains
       return
     end if
     
-    ! Load the glyph by index
-    success = tt_load_glyph_by_index(tt_face%stream, tt_face%tt_loca, glyph_index, glyph, error)
+    ! Find glyf table offset
+    found = .false.
+    glyf_offset = 0
+    do i = 1, size(tt_face%directory%tables)
+      if (tt_face%directory%tables(i)%tag == TTAG_glyf) then
+        glyf_offset = int(tt_face%directory%tables(i)%offset, c_size_t)
+        found = .true.
+        exit
+      end if
+    end do
+    
+    if (.not. found) then
+      error = FT_Err_Invalid_Table
+      return
+    end if
+    
+    ! Load the glyph by index with correct glyf offset
+    success = tt_load_glyph_by_index_with_offset(tt_face%stream, tt_face%tt_loca, &
+                                                  glyph_index, glyf_offset, glyph, error)
     if (.not. success) then
       return
     end if

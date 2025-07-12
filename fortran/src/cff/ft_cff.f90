@@ -531,10 +531,16 @@ contains
     
     offset = 0
     
+    ! Check if top_dict has entries allocated
+    if (.not. allocated(parser%top_dict%entries)) then
+      return
+    end if
+    
     ! Search for CharStrings operator in Top DICT
     do i = 1, parser%top_dict%num_entries
       if (parser%top_dict%entries(i)%operator == CFF_OP_CHARSTRINGS) then
-        if (parser%top_dict%entries(i)%num_operands >= 1) then
+        if (allocated(parser%top_dict%entries(i)%operands) .and. &
+            parser%top_dict%entries(i)%num_operands >= 1) then
           offset = int(parser%top_dict%entries(i)%operands(1))
         end if
         exit

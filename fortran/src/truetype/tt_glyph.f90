@@ -16,6 +16,7 @@ module tt_glyph
   public :: tt_load_glyph_header
   public :: tt_load_simple_glyph
   public :: tt_load_glyph_by_index
+  public :: tt_load_glyph_by_index_with_offset
   public :: tt_glyph_to_outline
   public :: tt_glyph_free
   
@@ -321,12 +322,13 @@ contains
     
   end subroutine cleanup_simple_glyph
 
-  ! Load a glyph by index using loca table and glyf table
-  function tt_load_glyph_by_index(stream, loca_table, glyph_index, glyph, error) result(success)
+  ! Load a glyph by index using loca table and glyf table (with glyf offset)
+  function tt_load_glyph_by_index_with_offset(stream, loca_table, glyph_index, glyf_offset, glyph, error) result(success)
     use tt_loca, only: TT_Loca_Table
     type(FT_Stream_Type), intent(inout) :: stream
     type(TT_Loca_Table), intent(in) :: loca_table
     integer, intent(in) :: glyph_index
+    integer(c_size_t), intent(in) :: glyf_offset
     type(TT_Simple_Glyph), intent(out) :: glyph
     integer(FT_Error), intent(out) :: error
     logical :: success
@@ -361,10 +363,8 @@ contains
       return
     end if
     
-    ! Seek to glyph data (assuming glyf table base offset is known)
-    ! For now, assume glyph_offset is absolute - this would need to be 
-    ! adjusted with glyf table base offset in a full implementation
-    if (.not. ft_stream_seek(stream, int(glyph_offset, c_size_t), error)) then
+    ! Seek to glyph data (glyph_offset is relative to glyf table)
+    if (.not. ft_stream_seek(stream, glyf_offset + int(glyph_offset, c_size_t), error)) then
       return
     end if
     
@@ -382,7 +382,7 @@ contains
       return
     end if
     
-  end function tt_load_glyph_by_index
+  end function tt_load_glyph_by_index_with_offset
 
   ! Convert TrueType glyph to FT_Outline
   function tt_glyph_to_outline(glyph, outline, error) result(success)
@@ -432,5 +432,21 @@ contains
     success = .true.
     
   end function tt_glyph_to_outline
+
+  ! Wrapper function for backward compatibility
+  function tt_load_glyph_by_index(stream, loca_table, glyph_index, glyph, error) result(success)
+    use tt_loca, only: TT_Loca_Table
+    type(FT_Stream_Type), intent(inout) :: stream
+    type(TT_Loca_Table), intent(in) :: loca_table
+    integer, intent(in) :: glyph_index
+    type(TT_Simple_Glyph), intent(out) :: glyph
+    integer(FT_Error), intent(out) :: error
+    logical :: success
+    
+    ! For backward compatibility, assume glyf offset is 0
+    ! This will need to be fixed in callers
+    success = tt_load_glyph_by_index_with_offset(stream, loca_table, glyph_index, 0_c_size_t, glyph, error)
+    
+  end function tt_load_glyph_by_index
 
 end module tt_glyph

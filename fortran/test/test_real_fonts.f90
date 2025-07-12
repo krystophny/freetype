@@ -21,13 +21,21 @@ program test_real_fonts
   logical :: success
   integer :: i
   character(len=256) :: font_file
+  logical :: file_exists
   
   print '("Real Font Loading Tests")'
   print '("======================")'
   print '()'
   
-  ! Test 1: Load test_font.ttf
-  font_file = "test_font.ttf"
+  ! Test 1: Load a real system font
+  font_file = "/usr/share/fonts/TTF/DejaVuSans.ttf"
+  
+  ! Check if font exists, fall back to test font if not
+  inquire(file=font_file, exist=file_exists)
+  if (.not. file_exists) then
+    font_file = "test_font.ttf"
+  end if
+  
   print '("Test 1: Loading ", A)', trim(font_file)
   
   ! Try loading as TrueType
