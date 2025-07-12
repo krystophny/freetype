@@ -194,7 +194,14 @@ contains
     
     ! Read flags array (with repeat flag handling)
     flag_idx = 1
-    do while (flag_idx <= glyph%num_points)
+    do while (flag_idx <= glyph%num_points .and. flag_idx > 0)
+      ! Validate flag_idx before using it
+      if (flag_idx < 1 .or. flag_idx > glyph%num_points) then
+        call cleanup_simple_glyph(glyph)
+        error = FT_Err_Invalid_Glyph_Format
+        return
+      end if
+      
       if (.not. ft_stream_read_byte(stream, temp8, error)) then
         call cleanup_simple_glyph(glyph)
         return
@@ -210,6 +217,13 @@ contains
           return
         end if
         repeat_count = temp8
+        
+        ! Validate repeat count to prevent overflow
+        if (repeat_count < 0 .or. flag_idx + repeat_count > glyph%num_points) then
+          call cleanup_simple_glyph(glyph)
+          error = FT_Err_Invalid_Glyph_Format
+          return
+        end if
         
         do j = 1, repeat_count
           if (flag_idx + j > glyph%num_points) exit
