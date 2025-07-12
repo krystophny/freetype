@@ -18,6 +18,9 @@ module ft_antialiasing_enhanced
   public :: ft_aa_engine_done
   public :: ft_aa_render_outline
   public :: ft_aa_render_outline_hq
+  public :: point_in_outline
+  public :: coverage_to_bitmap
+  public :: render_normal_aa
   
   ! Public constants
   public :: FT_AA_QUALITY_FAST
@@ -440,9 +443,8 @@ contains
     integer(FT_Error), intent(out) :: error
     logical :: success
     
-    integer :: x, y
+    integer :: x, y, pixel_value
     real(real32) :: coverage, gamma_corrected
-    integer(int8) :: pixel_value
     
     success = .false.
     error = FT_Err_Ok
@@ -451,18 +453,20 @@ contains
       do x = 1, min(engine%width, bitmap%width)
         coverage = engine%coverage_buffer(x, y)
         
-        ! Apply gamma correction
-        if (engine%quality%gamma_correction > 0.0) then
-          gamma_corrected = coverage ** (1.0 / engine%quality%gamma_correction)
-        else
-          gamma_corrected = coverage
+        if (coverage > 0.0) then
+          ! Apply gamma correction
+          if (engine%quality%gamma_correction > 0.0) then
+            gamma_corrected = coverage ** (1.0 / engine%quality%gamma_correction)
+          else
+            gamma_corrected = coverage
+          end if
+          
+          ! Convert to 8-bit pixel value
+          pixel_value = int(gamma_corrected * 255.0)
+          
+          ! Set pixel in bitmap
+          call ft_bitmap_set_pixel_gray(bitmap, x-1, y-1, pixel_value)
         end if
-        
-        ! Convert to 8-bit pixel value
-        pixel_value = int(gamma_corrected * 255.0, int8)
-        
-        ! Set pixel in bitmap
-        call ft_bitmap_set_pixel_gray(bitmap, x-1, y-1, int(pixel_value))
       end do
     end do
     
