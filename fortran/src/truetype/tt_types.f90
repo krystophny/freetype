@@ -33,6 +33,24 @@ module tt_types
   public :: TTAG_post
   public :: TTAG_OS2
   
+  ! Composite glyph flags
+  public :: ARGS_ARE_WORDS
+  public :: ARGS_ARE_XY_VALUES
+  public :: ROUND_XY_TO_GRID
+  public :: WE_HAVE_A_SCALE
+  public :: MORE_COMPONENTS
+  public :: WE_HAVE_AN_XY_SCALE
+  public :: WE_HAVE_A_2X2
+  public :: WE_HAVE_INSTR
+  public :: USE_MY_METRICS
+  public :: OVERLAP_COMPOUND
+  public :: SCALED_COMPONENT_OFFSET
+  public :: UNSCALED_COMPONENT_OFFSET
+  
+  ! Composite glyph types
+  public :: TT_Component
+  public :: TT_Composite_Glyph
+  
   ! Type definitions for TrueType
   integer, parameter :: FT_UShort = c_short
   integer, parameter :: FT_Short = c_short  
@@ -56,6 +74,20 @@ module tt_types
   integer(FT_ULong), parameter :: TTAG_post = int(z'706F7374', FT_ULong)  ! 'post'
   integer(FT_ULong), parameter :: TTAG_OS2  = int(z'4F532F32', FT_ULong)  ! 'OS/2'
   
+  ! Composite glyph flags
+  integer(FT_UShort), parameter :: ARGS_ARE_WORDS = int(z'0001', FT_UShort)
+  integer(FT_UShort), parameter :: ARGS_ARE_XY_VALUES = int(z'0002', FT_UShort)
+  integer(FT_UShort), parameter :: ROUND_XY_TO_GRID = int(z'0004', FT_UShort)
+  integer(FT_UShort), parameter :: WE_HAVE_A_SCALE = int(z'0008', FT_UShort)
+  integer(FT_UShort), parameter :: MORE_COMPONENTS = int(z'0020', FT_UShort)
+  integer(FT_UShort), parameter :: WE_HAVE_AN_XY_SCALE = int(z'0040', FT_UShort)
+  integer(FT_UShort), parameter :: WE_HAVE_A_2X2 = int(z'0080', FT_UShort)
+  integer(FT_UShort), parameter :: WE_HAVE_INSTR = int(z'0100', FT_UShort)
+  integer(FT_UShort), parameter :: USE_MY_METRICS = int(z'0200', FT_UShort)
+  integer(FT_UShort), parameter :: OVERLAP_COMPOUND = int(z'0400', FT_UShort)
+  integer(FT_UShort), parameter :: SCALED_COMPONENT_OFFSET = int(z'0800', FT_UShort)
+  integer(FT_UShort), parameter :: UNSCALED_COMPONENT_OFFSET = int(z'1000', FT_UShort)
+  
   ! TrueType Font Header
   type, bind(C) :: TT_Header
     integer(FT_Fixed) :: table_version    ! Should be 0x00010000 for version 1.0
@@ -78,6 +110,20 @@ module tt_types
     type(TT_Header) :: header
     type(TT_Table_Record), allocatable :: tables(:)
   end type TT_Table_Directory
+  
+  ! Composite glyph component
+  type :: TT_Component
+    integer(FT_UShort) :: flags
+    integer(FT_UShort) :: glyph_index
+    integer(FT_Short) :: arg1, arg2
+    real :: xx, xy, yx, yy  ! transformation matrix (2x2)
+  end type TT_Component
+  
+  ! Composite glyph
+  type :: TT_Composite_Glyph
+    integer :: num_components
+    type(TT_Component), allocatable :: components(:)
+  end type TT_Composite_Glyph
   
 
 contains
