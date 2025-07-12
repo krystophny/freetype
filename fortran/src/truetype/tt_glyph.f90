@@ -189,11 +189,34 @@ contains
       return
     end if
     
-    ! Allocate point arrays
-    allocate(glyph%flags(glyph%num_points))
-    allocate(glyph%x_coordinates(glyph%num_points))
-    allocate(glyph%y_coordinates(glyph%num_points))
-    allocate(glyph%on_curve(glyph%num_points))
+    ! Allocate point arrays with proper error checking
+    allocate(glyph%flags(glyph%num_points), stat=error)
+    if (error /= 0) then
+      call cleanup_simple_glyph(glyph)
+      error = FT_Err_Out_Of_Memory
+      return
+    end if
+    
+    allocate(glyph%x_coordinates(glyph%num_points), stat=error)
+    if (error /= 0) then
+      call cleanup_simple_glyph(glyph)
+      error = FT_Err_Out_Of_Memory
+      return
+    end if
+    
+    allocate(glyph%y_coordinates(glyph%num_points), stat=error)
+    if (error /= 0) then
+      call cleanup_simple_glyph(glyph)
+      error = FT_Err_Out_Of_Memory
+      return
+    end if
+    
+    allocate(glyph%on_curve(glyph%num_points), stat=error)
+    if (error /= 0) then
+      call cleanup_simple_glyph(glyph)
+      error = FT_Err_Out_Of_Memory
+      return
+    end if
     
     ! Read flags array (with repeat flag handling)
     flag_idx = 1

@@ -121,7 +121,12 @@ contains
     end do
     
     ! Allocate scanline buffer
-    allocate(scanline(bitmap%width))
+    allocate(scanline(bitmap%width), stat=error)
+    if (error /= 0) then
+      deallocate(edges)
+      error = FT_Err_Out_Of_Memory
+      return
+    end if
     
     ! Process each scanline
     do y = 0, bitmap%rows - 1
