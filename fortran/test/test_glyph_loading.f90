@@ -2,6 +2,7 @@ program test_glyph_loading
   use ft_types
   use ft_face_unified, only: FT_Unified_Face, ft_new_unified_face, ft_done_unified_face, &
                              ft_unified_get_glyph_index, ft_unified_load_glyph
+  use ft_face, only: ft_get_char_index
   use ft_outline_mod, only: FT_Outline, ft_outline_done
   use ft_geometry, only: FT_Vector
   use ft_bitmap_mod, only: FT_Bitmap, ft_bitmap_new, ft_bitmap_done, ft_bitmap_get_pixel, &
@@ -18,14 +19,15 @@ program test_glyph_loading
   integer :: glyph_index
   character(len=256) :: font_file
   integer :: x, y, i
+  integer :: direct_glyph_index
   character(len=1) :: pixel
   
   print '("Glyph Loading Test")'
   print '("==================")'
   print '()'
   
-  ! Use the test font we created
-  font_file = "test_font.ttf"
+  ! Use a real system font
+  font_file = "/usr/share/fonts/TTF/DejaVuSansMNerdFontMono-Bold.ttf"
   
   ! Load the font
   print '("Loading font: ", A)', trim(font_file)
@@ -38,16 +40,40 @@ program test_glyph_loading
   print '("SUCCESS: Loaded font")'
   print '("Font format: ", I0)', face%font_format
   print '("Number of glyphs: ", I0)', face%num_glyphs
+  print '("TrueType face allocated: ", L1)', allocated(face%truetype_face)
+  if (allocated(face%truetype_face)) then
+    print '("TrueType face loaded tables:")'
+    print '("  head_loaded: ", L1)', face%truetype_face%head_loaded
+    print '("  maxp_loaded: ", L1)', face%truetype_face%maxp_loaded
+    print '("  cmap_loaded: ", L1)', face%truetype_face%cmap_loaded
+    print '("  loca_loaded: ", L1)', face%truetype_face%loca_loaded
+    if (face%truetype_face%cmap_loaded) then
+      print '("  cmap num_tables: ", I0)', face%truetype_face%tt_cmap%header%num_tables
+      print '("  cmap has_format4: ", L1)', face%truetype_face%tt_cmap%has_format4
+      print '("  num_charmaps: ", I0)', face%truetype_face%num_charmaps
+      print '("  charmap_index: ", I0)', face%truetype_face%charmap_index
+      if (allocated(face%truetype_face%tt_cmap%encodings) .and. &
+          face%truetype_face%tt_cmap%header%num_tables > 0) then
+        print '("  first encoding platform: ", I0)', face%truetype_face%tt_cmap%encodings(1)%platform_id
+        print '("  first encoding encoding: ", I0)', face%truetype_face%tt_cmap%encodings(1)%encoding_id
+      end if
+    end if
+  end if
   print '()'
   
   ! Test glyph index for character 'A' (ASCII 65)
   glyph_index = ft_unified_get_glyph_index(face, 65)
   print '("Glyph index for ''A'' (65): ", I0)', glyph_index
   
-  if (glyph_index == 0) then
-    print '("No glyph found for character A, trying glyph index 1")'
-    glyph_index = 1
+  ! Debug: Test direct call to TrueType character mapping if allocated
+  if (allocated(face%truetype_face)) then
+    direct_glyph_index = ft_get_char_index(face%truetype_face, 65)
+    print '("Direct TrueType glyph index for ''A'': ", I0)', direct_glyph_index
   end if
+  
+  ! For testing, try a simple glyph first
+  print '("Trying simpler glyph index 1 instead of complex A")'
+  glyph_index = 1
   
   ! Load the glyph
   print '("Loading glyph index ", I0)', glyph_index
@@ -68,6 +94,14 @@ program test_glyph_loading
     do i = 1, min(5, outline%n_points)
       print '("  Point ", I0, ": (", I0, ",", I0, "), tag=", I0)', &
             i, outline%points(i)%x, outline%points(i)%y, outline%tags(i)
+    end do
+  end if
+  
+  ! Show contour structure  
+  if (outline%n_contours > 0 .and. associated(outline%contours)) then
+    print '("Contour endpoints (0-based):")'
+    do i = 1, min(5, outline%n_contours)
+      print '("  Contour ", I0, " ends at point: ", I0)', i, outline%contours(i)
     end do
   end if
   print '()'
