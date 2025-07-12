@@ -405,25 +405,36 @@ contains
     ! Build edge table from outline
     first = 1
     do i = 1, outline%n_contours
-      last = outline%contours(i) + 1  ! Convert to 1-based
+      last = outline%contours(i) + 1  ! Convert from 0-based to 1-based
       
-      ! Add edges for this contour
+      ! Validate bounds
+      if (last > outline%n_points) then
+        error = FT_Err_Invalid_Outline
+        call ft_edge_table_done(edge_table)
+        return
+      end if
+      
+      ! Add edges for this contour (but not the closing edge yet)
       do j = first, last - 1
-        x0 = int(outline%points(j)%x / 64)
-        y0 = int(outline%points(j)%y / 64)
-        x1 = int(outline%points(j + 1)%x / 64)
-        y1 = int(outline%points(j + 1)%y / 64)
-        
-        call ft_edge_table_add_line(edge_table, x0, y0, x1, y1)
+        if (j + 1 <= last) then
+          x0 = int(outline%points(j)%x / 64)
+          y0 = int(outline%points(j)%y / 64)
+          x1 = int(outline%points(j + 1)%x / 64)
+          y1 = int(outline%points(j + 1)%y / 64)
+          
+          call ft_edge_table_add_line(edge_table, x0, y0, x1, y1)
+        end if
       end do
       
-      ! Close contour
-      x0 = int(outline%points(last)%x / 64)
-      y0 = int(outline%points(last)%y / 64)
-      x1 = int(outline%points(first)%x / 64)
-      y1 = int(outline%points(first)%y / 64)
-      
-      call ft_edge_table_add_line(edge_table, x0, y0, x1, y1)
+      ! Close contour: connect last point back to first point of this contour
+      if (first <= last) then
+        x0 = int(outline%points(last)%x / 64)
+        y0 = int(outline%points(last)%y / 64)
+        x1 = int(outline%points(first)%x / 64)
+        y1 = int(outline%points(first)%y / 64)
+        
+        call ft_edge_table_add_line(edge_table, x0, y0, x1, y1)
+      end if
       
       first = last + 1
     end do
