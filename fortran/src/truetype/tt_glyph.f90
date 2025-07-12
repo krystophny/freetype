@@ -134,9 +134,9 @@ contains
     ! Load glyph header first
     if (.not. tt_load_glyph_header(stream, glyph%header, error)) return
     
-    ! Verify this is a simple glyph
+    ! Verify this is a simple glyph (header should already be loaded by caller)
     if (glyph%header%num_contours < 0) then
-      error = FT_Err_Invalid_Glyph_Format  ! Composite glyph not supported yet
+      error = FT_Err_Invalid_Glyph_Format  ! Composite glyph
       return
     end if
     
@@ -408,16 +408,23 @@ contains
       return
     end if
     
-    ! Load glyph header first
+    ! Load glyph header first to determine type
     if (.not. tt_load_glyph_header(stream, glyph%header, error)) then
+      return
+    end if
+    
+    
+    ! Reset stream position to start of glyph data (after seeking to glyph)
+    if (.not. ft_stream_seek(stream, glyf_offset + int(glyph_offset, c_size_t), error)) then
       return
     end if
     
     ! For simple glyphs (num_contours >= 0)
     if (glyph%header%num_contours >= 0) then
+      ! Let simple glyph loader read the header again
       success = tt_load_simple_glyph(stream, glyph, error)
     else
-      ! Composite glyph - load and process components
+      ! Composite glyph - load and process components  
       success = tt_load_composite_glyph(stream, glyph, error)
     end if
     
@@ -441,7 +448,10 @@ contains
     success = .false.
     error = FT_Err_Ok
     
-    ! Initialize composite glyph
+    ! Load glyph header first
+    if (.not. tt_load_glyph_header(stream, glyph%header, error)) return
+    
+    ! Initialize composite glyph and allocate storage for components
     component_count = 0
     more_components = .true.
     
@@ -452,47 +462,131 @@ contains
     mask_2x2 = int(z'0080')        ! WE_HAVE_A_2X2
     mask_more = int(z'0020')       ! MORE_COMPONENTS
     
-    ! First pass: count components
+    ! Allocate initial space for up to 16 components (will resize if needed)
+    allocate(composite%components(16), stat=error)
+    if (error /= 0) then
+      error = FT_Err_Out_Of_Memory
+      return
+    end if
+    
+    ! Parse and store components in a single pass
     do while (more_components)
-      if (.not. ft_stream_read_ushort(stream, flags, error)) return
-      if (.not. ft_stream_read_ushort(stream, temp16, error)) return  ! glyph_index
+      component_count = component_count + 1
       
+      ! Expand array if needed
+      if (component_count > size(composite%components)) then
+        ! TODO: Implement array resizing - for now just error out
+        deallocate(composite%components)
+        error = FT_Err_Invalid_Glyph_Format
+        return
+      end if
+      
+      if (.not. ft_stream_read_ushort(stream, flags, error)) then
+        deallocate(composite%components)
+        return
+      end if
+      
+      composite%components(component_count)%flags = flags
       flags_int = int(flags)
       
-      ! Skip arguments based on flags
+      ! Read glyph index
+      if (.not. ft_stream_read_ushort(stream, temp16, error)) then
+        deallocate(composite%components)
+        return
+      end if
+      composite%components(component_count)%glyph_index = temp16
+      
+      ! Read arguments (offsets or point indices)
       if (iand(flags_int, mask_words) /= 0) then
-        if (.not. ft_stream_read_short(stream, temp16, error)) return  ! arg1
-        if (.not. ft_stream_read_short(stream, temp16, error)) return  ! arg2
+        if (.not. ft_stream_read_short(stream, composite%components(component_count)%arg1, error)) then
+          deallocate(composite%components)
+          return
+        end if
+        if (.not. ft_stream_read_short(stream, composite%components(component_count)%arg2, error)) then
+          deallocate(composite%components)
+          return
+        end if
       else
-        if (.not. ft_stream_read_byte(stream, temp8, error)) return   ! arg1
-        if (.not. ft_stream_read_byte(stream, temp8, error)) return   ! arg2
+        if (.not. ft_stream_read_byte(stream, temp8, error)) then
+          deallocate(composite%components)
+          return
+        end if
+        composite%components(component_count)%arg1 = int(temp8, FT_Short)
+        if (.not. ft_stream_read_byte(stream, temp8, error)) then
+          deallocate(composite%components)
+          return
+        end if
+        composite%components(component_count)%arg2 = int(temp8, FT_Short)
       end if
       
-      ! Skip transformation matrix if present
+      ! Initialize transformation matrix to identity
+      composite%components(component_count)%xx = 1.0
+      composite%components(component_count)%xy = 0.0
+      composite%components(component_count)%yx = 0.0
+      composite%components(component_count)%yy = 1.0
+      
+      ! Read transformation matrix if present
       if (iand(flags_int, mask_scale) /= 0) then
-        if (.not. ft_stream_read_short(stream, temp16, error)) return  ! scale
+        if (.not. ft_stream_read_short(stream, temp16, error)) then
+          deallocate(composite%components)
+          return
+        end if
+        ! Convert from F2Dot14 to float
+        composite%components(component_count)%xx = real(temp16) / 16384.0
+        composite%components(component_count)%yy = composite%components(component_count)%xx
       else if (iand(flags_int, mask_xy_scale) /= 0) then
-        if (.not. ft_stream_read_short(stream, temp16, error)) return  ! xscale
-        if (.not. ft_stream_read_short(stream, temp16, error)) return  ! yscale
+        if (.not. ft_stream_read_short(stream, temp16, error)) then
+          deallocate(composite%components)
+          return
+        end if
+        composite%components(component_count)%xx = real(temp16) / 16384.0
+        if (.not. ft_stream_read_short(stream, temp16, error)) then
+          deallocate(composite%components)
+          return
+        end if
+        composite%components(component_count)%yy = real(temp16) / 16384.0
       else if (iand(flags_int, mask_2x2) /= 0) then
-        if (.not. ft_stream_read_short(stream, temp16, error)) return  ! xx
-        if (.not. ft_stream_read_short(stream, temp16, error)) return  ! xy
-        if (.not. ft_stream_read_short(stream, temp16, error)) return  ! yx
-        if (.not. ft_stream_read_short(stream, temp16, error)) return  ! yy
+        if (.not. ft_stream_read_short(stream, temp16, error)) then
+          deallocate(composite%components)
+          return
+        end if
+        composite%components(component_count)%xx = real(temp16) / 16384.0
+        if (.not. ft_stream_read_short(stream, temp16, error)) then
+          deallocate(composite%components)
+          return
+        end if
+        composite%components(component_count)%xy = real(temp16) / 16384.0
+        if (.not. ft_stream_read_short(stream, temp16, error)) then
+          deallocate(composite%components)
+          return
+        end if
+        composite%components(component_count)%yx = real(temp16) / 16384.0
+        if (.not. ft_stream_read_short(stream, temp16, error)) then
+          deallocate(composite%components)
+          return
+        end if
+        composite%components(component_count)%yy = real(temp16) / 16384.0
       end if
       
-      component_count = component_count + 1
       more_components = (iand(flags_int, mask_more) /= 0)
     end do
     
-    ! For now, create an empty simple glyph for composite glyphs
-    ! This allows fonts to load but doesn't render composite glyphs correctly
+    ! Store the actual component count
+    composite%num_components = component_count
+    
+    ! For now, still create empty glyph but store composite info for future enhancement
+    ! TODO: Implement actual composite glyph resolution
     glyph%num_points = 0
     glyph%header%num_contours = 0
     glyph%header%x_min = 0
     glyph%header%y_min = 0
     glyph%header%x_max = 0
     glyph%header%y_max = 0
+    
+    ! Clean up composite data (not needed for current simple implementation)
+    if (allocated(composite%components)) then
+      deallocate(composite%components)
+    end if
     
     success = .true.
     
