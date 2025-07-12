@@ -46,11 +46,11 @@ program debug_glyph_loading_detailed
   if (face%truetype_face%loca_loaded) then
     ! print *, "  loca format:", face%truetype_face%tt_loca%format
     print *, "  loca table size:", size(face%truetype_face%tt_loca%offsets)
-    if (glyph_index + 2 <= size(face%truetype_face%tt_loca%offsets)) then
-      print *, "  Glyph", glyph_index, "offset:", face%truetype_face%tt_loca%offsets(glyph_index + 1)
-      print *, "  Glyph", glyph_index+1, "offset:", face%truetype_face%tt_loca%offsets(glyph_index + 2)
-      print *, "  Glyph size:", face%truetype_face%tt_loca%offsets(glyph_index + 2) - &
-                                  face%truetype_face%tt_loca%offsets(glyph_index + 1)
+    if (glyph_index + 1 <= size(face%truetype_face%tt_loca%offsets) - 1) then
+      print *, "  Glyph", glyph_index, "offset:", face%truetype_face%tt_loca%offsets(glyph_index)
+      print *, "  Glyph", glyph_index+1, "offset:", face%truetype_face%tt_loca%offsets(glyph_index + 1)
+      print *, "  Glyph size:", face%truetype_face%tt_loca%offsets(glyph_index + 1) - &
+                                  face%truetype_face%tt_loca%offsets(glyph_index)
     end if
   end if
   

@@ -123,6 +123,11 @@ contains
     end if
     
     ! Load the glyph by index with correct glyf offset
+    if (glyph_index == 36) then
+      print *, "DEBUG ft_face_unified.f90: calling tt_load_glyph_by_index_with_offset"
+      print *, "DEBUG ft_face_unified.f90: glyph_index =", glyph_index
+      print *, "DEBUG ft_face_unified.f90: glyf_offset =", glyf_offset
+    end if
     success = tt_load_glyph_by_index_with_offset(tt_face%stream, tt_face%tt_loca, &
                                                   glyph_index, glyf_offset, glyph, error)
     if (.not. success) then
@@ -285,9 +290,16 @@ contains
     success = .false.
     error = FT_Err_Ok
     
+    if (glyph_index == 36) then
+      print *, "DEBUG ft_unified_load_glyph: glyph_index =", glyph_index
+      print *, "DEBUG ft_unified_load_glyph: font_format =", face%font_format
+    end if
+    
     select case (face%font_format)
     case (FT_FONT_FORMAT_TRUETYPE, FT_FONT_FORMAT_OPENTYPE)
+      if (glyph_index == 36) print *, "DEBUG: Taking TrueType path"
       if (allocated(face%truetype_face)) then
+        if (glyph_index == 36) print *, "DEBUG: TrueType face allocated, calling load_truetype_glyph"
         success = load_truetype_glyph(face%truetype_face, glyph_index, outline, error)
       end if
       

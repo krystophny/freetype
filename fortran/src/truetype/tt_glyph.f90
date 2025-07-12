@@ -385,8 +385,17 @@ contains
     end if
     
     ! Get glyph offset and size from loca table
-    glyph_offset = loca_table%offsets(glyph_index + 1)  ! +1 for 1-based indexing
-    glyph_size = loca_table%offsets(glyph_index + 2) - glyph_offset
+    glyph_offset = loca_table%offsets(glyph_index)      ! 0-based indexing matches C
+    glyph_size = loca_table%offsets(glyph_index + 1) - glyph_offset
+    
+    ! DEBUG: Show what we're reading for glyph 36
+    if (glyph_index == 36) then
+      print *, "DEBUG tt_glyph.f90: glyph_index =", glyph_index
+      print *, "DEBUG tt_glyph.f90: loca_table%offsets(36) =", loca_table%offsets(36)
+      print *, "DEBUG tt_glyph.f90: loca_table%offsets(37) =", loca_table%offsets(37)
+      print *, "DEBUG tt_glyph.f90: glyph_offset =", glyph_offset
+      print *, "DEBUG tt_glyph.f90: glyph_size =", glyph_size
+    end if
     
     ! Empty glyph (size 0)
     if (glyph_size == 0) then
