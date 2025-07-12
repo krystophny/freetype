@@ -3,6 +3,7 @@ program demo_font_rendering
   use ft_types
   use ft_bitmap_mod
   use ft_outline_mod
+  use ft_outline_transform_mod
   use ft_antialiasing_enhanced
   use ft_hint
   use ft_bitmap_io
@@ -10,7 +11,7 @@ program demo_font_rendering
   implicit none
   
   type(FT_Unified_Face) :: face
-  type(FT_Outline) :: outline
+  type(FT_Outline) :: outline, transformed_outline
   type(FT_Bitmap) :: bitmap_no_aa, bitmap_aa, bitmap_aa_hinted
   type(FT_AA_Engine) :: aa_engine
   type(FT_AA_Quality) :: aa_quality
@@ -60,6 +61,18 @@ program demo_font_rendering
   print *, "  Contours:", outline%n_contours
   print *
   
+  ! Transform outline coordinates to bitmap space
+  print *, "Transforming outline coordinates to bitmap space..."
+  success = ft_outline_transform_to_bitmap(outline, transformed_outline, &
+                                          face%units_per_em, bitmap_size, bitmap_size, error)
+  if (.not. success) then
+    print *, "ERROR: Failed to transform outline:", error
+    call ft_done_unified_face(face)
+    stop
+  end if
+  print *, "Outline transformed successfully!"
+  print *
+  
   ! Create bitmaps
   success = ft_bitmap_new(bitmap_size, bitmap_size, FT_PIXEL_MODE_GRAY, bitmap_no_aa, error)
   if (.not. success) stop "Failed to create bitmap"
@@ -96,8 +109,8 @@ program demo_font_rendering
     stop
   end if
   
-  ! Render with antialiasing
-  success = ft_aa_render_outline(aa_engine, outline, bitmap_aa, error)
+  ! Render with antialiasing using transformed outline
+  success = ft_aa_render_outline(aa_engine, transformed_outline, bitmap_aa, error)
   if (success) then
     print *, "   SUCCESS: Antialiased rendering complete"
   else
@@ -116,8 +129,8 @@ program demo_font_rendering
     print *, "   Hint type:", hint_engine%hint_settings%hint_type
     print *, "   Grid fitting:", hint_engine%hint_settings%grid_fitting
     
-    ! Apply hinting to outline
-    success = ft_hint_apply_outline(hint_engine, outline, error)
+    ! Apply hinting to transformed outline
+    success = ft_hint_apply_outline(hint_engine, transformed_outline, error)
     if (success) then
       print *, "   Hinting applied successfully"
     else
@@ -140,8 +153,8 @@ program demo_font_rendering
     stop
   end if
   
-  ! Render with high-quality antialiasing
-  success = ft_aa_render_outline_hq(aa_engine, outline, bitmap_aa_hinted, error)
+  ! Render with high-quality antialiasing using transformed outline
+  success = ft_aa_render_outline_hq(aa_engine, transformed_outline, bitmap_aa_hinted, error)
   if (success) then
     print *, "   SUCCESS: High-quality AA + hinted rendering complete"
   else
@@ -190,6 +203,10 @@ program demo_font_rendering
   if (associated(outline%points)) deallocate(outline%points)
   if (associated(outline%tags)) deallocate(outline%tags)
   if (associated(outline%contours)) deallocate(outline%contours)
+  
+  if (associated(transformed_outline%points)) deallocate(transformed_outline%points)
+  if (associated(transformed_outline%tags)) deallocate(transformed_outline%tags)
+  if (associated(transformed_outline%contours)) deallocate(transformed_outline%contours)
   
   call ft_done_unified_face(face)
   
