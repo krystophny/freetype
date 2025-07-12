@@ -15,14 +15,20 @@ module ft_geometry
   public :: ft_vector_transform
   public :: ft_vector_length
   public :: ft_vector_dot
+  public :: ft_vector_scale
+  public :: ft_vector_rotate
   
   ! Matrix operations
   public :: ft_matrix_multiply
   public :: ft_matrix_invert
+  public :: ft_matrix_scale
+  public :: ft_matrix_rotate
+  public :: ft_matrix_translate
   
   ! BBox operations
   public :: ft_bbox_union
   public :: ft_bbox_intersect
+  public :: ft_bbox_transform
   
   ! Type definitions
   
@@ -182,5 +188,117 @@ contains
       c%yMax = 0
     end if
   end function ft_bbox_intersect
+  
+  ! Scale vector by factor
+  function ft_vector_scale(vector, scale_factor) result(result_vector)
+    type(FT_Vector), intent(in) :: vector
+    real, intent(in) :: scale_factor
+    type(FT_Vector) :: result_vector
+    
+    result_vector%x = int(real(vector%x) * scale_factor)
+    result_vector%y = int(real(vector%y) * scale_factor)
+    
+  end function ft_vector_scale
+  
+  ! Rotate vector by angle (in radians)
+  function ft_vector_rotate(vector, angle) result(result_vector)
+    type(FT_Vector), intent(in) :: vector
+    real, intent(in) :: angle
+    type(FT_Vector) :: result_vector
+    
+    real :: cos_a, sin_a, x_real, y_real
+    
+    cos_a = cos(angle)
+    sin_a = sin(angle)
+    x_real = real(vector%x)
+    y_real = real(vector%y)
+    
+    result_vector%x = int(x_real * cos_a - y_real * sin_a)
+    result_vector%y = int(x_real * sin_a + y_real * cos_a)
+    
+  end function ft_vector_rotate
+  
+  ! Create scaling matrix
+  function ft_matrix_scale(scale_x, scale_y) result(matrix)
+    real, intent(in) :: scale_x, scale_y
+    type(FT_Matrix) :: matrix
+    
+    matrix%xx = int(scale_x * real(FT_FIXED_ONE))
+    matrix%xy = 0
+    matrix%yx = 0
+    matrix%yy = int(scale_y * real(FT_FIXED_ONE))
+    
+  end function ft_matrix_scale
+  
+  ! Create rotation matrix
+  function ft_matrix_rotate(angle) result(matrix)
+    real, intent(in) :: angle
+    type(FT_Matrix) :: matrix
+    
+    real :: cos_a, sin_a
+    
+    cos_a = cos(angle)
+    sin_a = sin(angle)
+    
+    matrix%xx = int(cos_a * real(FT_FIXED_ONE))
+    matrix%xy = int(-sin_a * real(FT_FIXED_ONE))
+    matrix%yx = int(sin_a * real(FT_FIXED_ONE))
+    matrix%yy = int(cos_a * real(FT_FIXED_ONE))
+    
+  end function ft_matrix_rotate
+  
+  ! Create translation matrix (for homogeneous coordinates)
+  function ft_matrix_translate(offset_x, offset_y) result(matrix)
+    integer(FT_Pos), intent(in) :: offset_x, offset_y
+    type(FT_Matrix) :: matrix
+    
+    ! Standard 2x2 matrix doesn't support translation
+    ! This creates an identity matrix - translation must be applied separately
+    matrix%xx = FT_FIXED_ONE
+    matrix%xy = 0
+    matrix%yx = 0
+    matrix%yy = FT_FIXED_ONE
+    
+  end function ft_matrix_translate
+  
+  ! Transform bounding box
+  function ft_bbox_transform(bbox, matrix) result(result_bbox)
+    type(FT_BBox), intent(in) :: bbox
+    type(FT_Matrix), intent(in) :: matrix
+    type(FT_BBox) :: result_bbox
+    
+    type(FT_Vector) :: corners(4)
+    type(FT_Vector) :: transformed_corners(4)
+    integer :: i
+    
+    ! Define the four corners of the bounding box
+    corners(1)%x = bbox%xMin
+    corners(1)%y = bbox%yMin
+    corners(2)%x = bbox%xMax
+    corners(2)%y = bbox%yMin
+    corners(3)%x = bbox%xMax
+    corners(3)%y = bbox%yMax
+    corners(4)%x = bbox%xMin
+    corners(4)%y = bbox%yMax
+    
+    ! Transform all corners
+    do i = 1, 4
+      transformed_corners(i) = ft_vector_transform(corners(i), matrix)
+    end do
+    
+    ! Find new bounding box
+    result_bbox%xMin = transformed_corners(1)%x
+    result_bbox%xMax = transformed_corners(1)%x
+    result_bbox%yMin = transformed_corners(1)%y
+    result_bbox%yMax = transformed_corners(1)%y
+    
+    do i = 2, 4
+      result_bbox%xMin = min(result_bbox%xMin, transformed_corners(i)%x)
+      result_bbox%xMax = max(result_bbox%xMax, transformed_corners(i)%x)
+      result_bbox%yMin = min(result_bbox%yMin, transformed_corners(i)%y)
+      result_bbox%yMax = max(result_bbox%yMax, transformed_corners(i)%y)
+    end do
+    
+  end function ft_bbox_transform
 
 end module ft_geometry

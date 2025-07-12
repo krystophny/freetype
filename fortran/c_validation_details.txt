@@ -1,0 +1,39 @@
+C FreeType Validation Details
+=============================
+
+Font: /usr/share/fonts/TTF/DejaVuSans.ttf
+Character: 'A' (glyph index 36)
+Units per EM: 2048
+Pixel size: 64x64
+
+RAW OUTLINE DATA (font units):
+Points: 11
+Contours: 2
+Point  0: (   700,   1294) tag: 0x01
+Point  1: (   426,    551) tag: 0x01
+Point  2: (   975,    551) tag: 0x01
+Point  3: (   586,   1493) tag: 0x01
+Point  4: (   815,   1493) tag: 0x01
+Point  5: (  1384,      0) tag: 0x01
+Point  6: (  1174,      0) tag: 0x01
+Point  7: (  1038,    383) tag: 0x01
+Point  8: (   365,    383) tag: 0x01
+Point  9: (   229,      0) tag: 0x01
+Point 10: (    16,      0) tag: 0x01
+Contour 0: ends at point 2
+Contour 1: ends at point 10
+
+SCALED OUTLINE DATA (26.6 fixed point):
+Points: 11
+Contours: 2
+Point  0: (  1400,   2602) = (21.88, 40.66) pixels, tag: 0x3d
+Point  1: (   852,   1088) = (13.31, 17.00) pixels, tag: 0x19
+Point  2: (  1950,   1088) = (30.47, 17.00) pixels, tag: 0x09
+Point  3: (  1172,   3008) = (18.31, 47.00) pixels, tag: 0x19
+Point  4: (  1630,   3008) = (25.47, 47.00) pixels, tag: 0x09
+Point  5: (  2768,      0) = (43.25, 0.00) pixels, tag: 0x19
+Point  6: (  2348,      0) = (36.69, 0.00) pixels, tag: 0x09
+Point  7: (  2076,    768) = (32.44, 12.00) pixels, tag: 0x19
+Point  8: (   730,    768) = (11.41, 12.00) pixels, tag: 0x09
+Point  9: (   458,      0) = (7.16, 0.00) pixels, tag: 0x19
+Point 10: (    32,      0) = (0.50, 0.00) pixels, tag: 0x09

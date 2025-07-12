@@ -11,6 +11,9 @@ module ft_face_unified
   use ft_outline_mod, only: FT_Outline, FT_CURVE_TAG_ON
   use ft_stream, only: ft_stream_open, ft_stream_close, ft_stream_seek, &
                        ft_stream_size, ft_stream_read_byte
+  use tt_types, only: TTAG_head, TTAG_maxp
+  use tt_head, only: tt_load_head_table
+  use tt_maxp, only: tt_load_maxp_table
   use, intrinsic :: iso_c_binding
   use, intrinsic :: iso_fortran_env, only: int8, int16, int32, int64
   implicit none
@@ -143,6 +146,8 @@ contains
     logical :: success
     
     integer :: format
+    type(FT_Stream_Type) :: stream
+    logical :: stream_opened = .false.
     
     success = .false.
     error = FT_Err_Ok
@@ -151,25 +156,35 @@ contains
     face%face_index = face_index
     face%font_format = FT_FONT_FORMAT_UNKNOWN
     
-    ! Open the font file
-    if (.not. ft_stream_open(face%stream, filepath, error)) then
+    ! Open the font file with optimized stream
+    if (.not. ft_stream_open(stream, filepath, error)) then
       print *, "Failed to open stream for file: ", trim(filepath)
       print *, "Error code: ", error
       return
     end if
     
-    face%is_open = .true.
+    stream_opened = .true.
     
-    ! Detect font format
-    if (.not. ft_detect_font_format(face%stream, format, error)) then
-      call ft_stream_close(face%stream)
-      face%is_open = .false.
+    ! Detect font format - use temporary stream to avoid multiple opens
+    if (.not. ft_detect_font_format(stream, format, error)) then
+      call ft_stream_close(stream)
+      return
+    end if
+    
+    ! Reset stream position for actual loading
+    if (.not. ft_stream_seek(stream, 0_int64, error)) then
+      call ft_stream_close(stream)
       return
     end if
     
     face%font_format = format
     
-    ! Load based on format
+    ! Transfer stream to face after format detection
+    face%stream = stream
+    face%is_open = .true.
+    stream_opened = .false.  ! Face now owns the stream
+    
+    ! Load based on format (using existing functions for now)
     select case (format)
     case (FT_FONT_FORMAT_TRUETYPE, FT_FONT_FORMAT_OPENTYPE)
       success = load_truetype_face(face, error)
@@ -184,7 +199,9 @@ contains
       error = FT_Err_Unknown_File_Format
     end select
     
-    if (.not. success) then
+    if (.not. success .and. stream_opened) then
+      call ft_stream_close(stream)
+    else if (.not. success) then
       call ft_stream_close(face%stream)
       face%is_open = .false.
     end if
@@ -752,5 +769,8 @@ contains
     end if
     
   end subroutine setup_tt_charmaps
+
+  ! Performance-optimized font loading (stream reuse optimization)
+  ! The main optimization is avoiding multiple file opens by reusing streams
 
 end module ft_face_unified
